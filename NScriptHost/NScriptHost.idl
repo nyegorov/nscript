@@ -1,0 +1,45 @@
+import "docobj.idl";
+
+[
+	object,
+	dual,
+	uuid(4C0DBEF9-DF57-455a-B119-10E4D7744E55)
+] 
+#line 15 "d:\\my projects\\nscript\\nscripthost\\nscripthost.cpp"
+interface INScript : IDispatch {
+	[id(1)] HRESULT  AddObject([in] BSTR name, [in] VARIANT object);
+	[id(2)] HRESULT  Exec([in] BSTR script, [out,retval] VARIANT *pret);
+};
+
+[
+	object,
+	uuid(BF4F1403-B407-42aa-B642-F57B33FED8A1)
+] 
+#line 21 "d:\\my projects\\nscript\\nscripthost\\nscripthost.cpp"
+interface IObject : IUnknown {
+	HRESULT  New([out] VARIANT *result);
+	HRESULT  Get([out] VARIANT *result);
+	HRESULT  Set([in] const VARIANT *value);
+	HRESULT  Call([in] const VARIANT *params, [out] VARIANT *result);
+	HRESULT  Item([in] const VARIANT *item, [out] VARIANT *result);
+	HRESULT  Index([in] const VARIANT *index, [out] VARIANT *result);
+};
+
+
+[ version(1.0), uuid(CC27330C-FA87-4bdd-A2F2-8495DCBFCF1F) ]
+library NScript
+{
+	importlib("stdole2.tlb");
+	importlib("olepro32.dll");
+
+	[
+		version(1.0),
+		uuid(3fd55c79-34ce-4ba1-b86d-e39da245cbca)
+	] 
+#line 33 "d:\\my projects\\nscript\\nscripthost\\nscripthost.cpp"
+	coclass Parser {
+		interface INScript;
+	};
+
+}
+

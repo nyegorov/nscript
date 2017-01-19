@@ -1,0 +1,7 @@
+; NScriptPS.def
+LIBRARY	NScriptProxy.dll
+EXPORTS
+	DllGetClassObject	PRIVATE  
+	DllCanUnloadNow		PRIVATE
+	DllRegisterServer	PRIVATE
+	DllUnregisterServer	PRIVATE
