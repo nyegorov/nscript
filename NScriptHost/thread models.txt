@@ -1,0 +1,47 @@
+Comparison of thread affinity for various COM inter-apartment calls
+
+R - remote ORPC call
+p - local proxy/stub call
+
+1. Threading model = Apartment, Both or None
+                         
+ Client  |  Method call   |  Callback call
+ thread  |    thread      |     thread
+---------+----------------+-------------------
+  STA1   |      STA1      |      STA1
+  STA2   | R    STA1      |      STA1  
+  MTA1   | R    STA1      |      STA1
+  MTA2   | R    STA1      |      STA1
+ 
+
+2. Threading model = Free
+
+ Client  |  Method call   |  Callback call
+ thread  |    thread      |     thread
+---------+----------------+-------------------
+  STA1   | R    xxxx      | R    STA1
+  STA2   | R    yyyy      | R    STA1  
+  MTA1   |      MTA1      | R    STA1
+  MTA2   |      MTA2      | R    STA1
+
+
+3. Threading model = Neutral
+
+ Client  |  Method call   |  Callback call
+ thread  |    thread      |     thread
+---------+----------------+-------------------
+  STA1   | p    STA1      | R    STA1
+  STA2   | p    STA2      | R    STA1  
+  MTA1   | p    MTA1      | R    STA1
+  MTA2   | p    MTA2      | R    STA1
+
+
+4. Threading model = Neutral+FTM
+
+ Client  |  Method call   |  Callback call
+ thread  |    thread      |     thread
+---------+----------------+-------------------
+  STA1   |      STA1      |      STA1
+  STA2   |      STA2      |      STA2  
+  MTA1   |      MTA1      |      MTA1
+  MTA2   |      MTA2      |      MTA2

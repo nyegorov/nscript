@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "pch.h"
 #include "CppUnitTest.h"
 
 #include "../NScriptHost/NScript/NScript.h"
