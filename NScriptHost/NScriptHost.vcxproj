@@ -160,9 +160,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Text Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="ComLite\ClassFactory.h" />
     <ClInclude Include="ComLite\ComLite.h" />
     <ClInclude Include="ComLite\Dispatch.h" />

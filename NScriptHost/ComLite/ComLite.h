@@ -115,4 +115,9 @@ protected:
 
 template<class T> T* CreateObject(bool addref = false, IUnknown *pouter = NULL)	{return new T(addref, pouter);}
 
+template<class T, class I, class... ARGS> bool InitObject(I **pobj, ARGS&&... args) {
+	if (!pobj || !(*pobj = com::CreateObject<T>(true)))	return false;
+	return (*pobj)->Init(std::forward<ARGS>(args)...);
+}
+
 }
