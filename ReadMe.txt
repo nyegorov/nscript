@@ -31,7 +31,7 @@ COM objects.
 /////////////////////////////////////////////////////////////////////////////
 Other notes:
 
-Project use lightweight COM support library that also can be useful. See unit
-tests for more information.
+Project uses lightweight COM support library that also can be useful. See 
+unit tests for more information.
 
 /////////////////////////////////////////////////////////////////////////////

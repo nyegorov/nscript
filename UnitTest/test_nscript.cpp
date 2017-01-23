@@ -38,7 +38,7 @@ namespace UnitTest
 					res = '[';
 					for (int i = 0; i<sa.Count(); i++) {
 						if (i)	res += "; ";
-						res += bstr_t(*sa.GetElement(i));
+						res += bstr_t(sa[i]);
 					}
 					res += ']';
 				}
@@ -55,6 +55,7 @@ namespace UnitTest
 		{
 			Assert::AreEqual("2,1", eval("2.10000000000000000000000000000000000001").c_str());
 			Assert::AreEqual("2", eval("2").c_str(), "integers", LINE_INFO());
+			Assert::AreEqual("-1234567890123456789", eval("-1234567890123456789").c_str(), "long int", LINE_INFO());
 			Assert::AreEqual("31", eval("0x1F").c_str(), "hex", LINE_INFO());
 			Assert::AreEqual("3,14", eval("3.14").c_str(), "float", LINE_INFO());
 			Assert::AreEqual("-1,314", eval("-3.14e-1-1e+0").c_str(), "exp", LINE_INFO());

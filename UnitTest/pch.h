@@ -15,3 +15,4 @@
 #include <comutil.h>
 #include <thread>
 #include <strstream>
+#include <mutex>

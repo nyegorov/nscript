@@ -261,15 +261,18 @@ namespace UnitTest
 			LPSTREAM pstreams[3];
 			string res[4];
 			INScriptPtr ns(CLSID_Parser);
-			ostrstream os;
+			mutex mut;
 			ns->AddObject(L"callback_id", new ThreadId());
 
-			auto thread_func = [](string &res, LPSTREAM pstream, string name, DWORD ctx) {
+			auto thread_func = [&mut](string &res, LPSTREAM pstream, string name, DWORD ctx) {
 				CoInitializeEx(NULL, ctx);
 				INScriptPtr ns;
 				ostrstream os;
 				CoGetInterfaceAndReleaseStream(pstream, IID_INScript, (PVOID*)&ns);
-				os << name << ": " << GetCurrentThreadId() << " -> " << bstr_t(ns->Exec(apt_test));
+				{	
+					lock_guard<mutex> lock(mut);
+					os << name << ": " << GetCurrentThreadId() << " -> " << bstr_t(ns->Exec(apt_test));
+				}
 				res.assign(os.str(), (unsigned)os.pcount());
 				ns = NULL;
 				CoUninitialize();
@@ -279,8 +282,12 @@ namespace UnitTest
 			std::thread sta( thread_func, ref(res[0]), pstreams[0], "STA",  COINIT_APARTMENTTHREADED);
 			std::thread mta1(thread_func, ref(res[1]), pstreams[1], "MTA1", COINIT_MULTITHREADED);
 			std::thread mta2(thread_func, ref(res[2]), pstreams[2], "MTA2", COINIT_MULTITHREADED);
-			os << "MAIN STA: " << GetCurrentThreadId() << " -> " << bstr_t(ns->Exec(apt_test));
-			res[3].assign(os.str(), (unsigned)os.pcount());
+			{
+				ostrstream os;
+				lock_guard<mutex> lock(mut);
+				os << "MAIN STA: " << GetCurrentThreadId() << " -> " << bstr_t(ns->Exec(apt_test));
+				res[3].assign(os.str(), (unsigned)os.pcount());
+			}
 
 			MSG msg;
 			HANDLE handles[3] = { sta.native_handle(), mta1.native_handle(), mta2.native_handle() };

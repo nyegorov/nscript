@@ -138,12 +138,12 @@ variant_t* SafeArray::GetData()	{
 	return p;
 }
 
-variant_t* SafeArray::GetElement(long index)	{
-	variant_t *p = &_sa;
+variant_t& SafeArray::operator [](long index)	{
+	variant_t* p = &_sa;
 	if(_count)	Check(DISP_E_ARRAYISLOCKED);
 	if(index >= Count())	Redim(index+1);
 	if(IsArray())		Check(SafeArrayPtrOfIndex(V_ARRAY(&_sa), &index, (void**)&p));
-	return p;
+	return *p;
 }
 
 // Variable
@@ -698,7 +698,7 @@ Parser::Token Parser::Next()
 void Parser::ReadNumber(tchar c)
 {
 	enum NumberStage {nsint,nsdot,nsexp,nspwr,nshex} stage = nsint;
-	__int64 base = 10, m = c - '0';
+	int64_t base = 10, m = c - '0';
 	int e1 = 0, e2 = 0, esign = 1;
 	bool overflow = false;
 

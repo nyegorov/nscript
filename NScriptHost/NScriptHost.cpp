@@ -29,31 +29,29 @@ __interface IObject : public IUnknown {
 
 typedef com::UnknownT<com::multi_thread, com::module_lock>	UnknownInproc;
 
-struct ThreadId : public nscript::Object {
-	STDMETHODIMP Call(const variant_t& params, variant_t& result) { return result = (long)GetCurrentThreadId(), S_OK; }
-};
-
 [coclass, uuid = "{3fd55c79-34ce-4ba1-b86d-e39da245cbca}"]
 class Parser : public com::Dispatch<INScript, com::embedded<INScript>>, public ISupportErrorInfo, public UnknownInproc
 {
 	nscript::NScript		_script;
 	IUnknownPtr				_ftm;
-	bool					_inprocess;
 
 	InterfaceEntry* GetInterfaceTable() {
 		static InterfaceEntry table[] = {
 			Interface<ISupportErrorInfo>(this),
 			Interface<INScript>(this),
 			Interface<IDispatch>(this),
-			//			Aggregate<IMarshal>(_ftm.GetInterfacePtr()),
+			Aggregate<IMarshal>(_ftm.GetInterfacePtr()),
 			NULL
 		};
 		return table;
 	}
 
+	struct ThreadId : public nscript::Object {
+		STDMETHODIMP Call(const variant_t& params, variant_t& result) { return result = (long)GetCurrentThreadId(), S_OK; }
+	};
+
 public:
 	void Construct() {
-		_inprocess = false;
 		_script.AddObject(TEXT("thread_id"), new ThreadId());
 		CoCreateFreeThreadedMarshaler(this->GetUnknown(), &_ftm);
 	}

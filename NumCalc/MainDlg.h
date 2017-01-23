@@ -179,7 +179,7 @@ public:
 						_result = '[';
 						for(int i=0; i<sa.Count(); i++)	{
 							if(i)	_result += L" ; ";
-							_result += bstr_t(*sa.GetElement(i));
+							_result += bstr_t(sa[i]);
 						}
 						_result += ']';
 					}	else	

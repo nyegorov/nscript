@@ -36,7 +36,7 @@ library NScript
 		version(1.0),
 		uuid(3fd55c79-34ce-4ba1-b86d-e39da245cbca)
 	] 
-#line 37 "d:\\my projects\\nscript\\nscripthost\\nscripthost.cpp"
+#line 33 "d:\\my projects\\nscript\\nscripthost\\nscripthost.cpp"
 	coclass Parser {
 		interface INScript;
 	};

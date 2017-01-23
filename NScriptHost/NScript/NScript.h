@@ -173,7 +173,7 @@ public:
 	void Get(long index, variant_t& value) const;
 	long Count() const;
 	variant_t* GetData();
-	variant_t* GetElement(long index);
+	variant_t& operator [](long index);
 	void FreeData();
 
 protected:
@@ -210,7 +210,7 @@ protected:
 class Indexer : public Variable	{
 public:
 	Indexer(IValuePtr value, const variant_t& index) : _index(index), _value(value)	{};
-	STDMETHODIMP GetRef(variant_t** ppvar)							{_value->GetRef(ppvar);*ppvar = SafeArray(**ppvar).GetElement(_index);return S_OK;}
+	STDMETHODIMP GetRef(variant_t** ppvar)							{_value->GetRef(ppvar);*ppvar = &(SafeArray(**ppvar)[_index]);return S_OK;}
 	STDMETHODIMP Get(variant_t& result);
 protected:
 	~Indexer()	{}
