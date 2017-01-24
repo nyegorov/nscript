@@ -82,6 +82,4 @@ public:
 	STDMETHODIMP Unregister();
 };
 
-IUnknownPtr CreateInstance(REFCLSID rclsId, LPCTSTR module = NULL, IUnknown *pouter = NULL);
-
 }

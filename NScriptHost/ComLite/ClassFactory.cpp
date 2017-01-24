@@ -158,18 +158,4 @@ STDMETHODIMP TypeLibrary::Unregister()
 	return S_OK;
 }
 
-IUnknownPtr CreateInstance(REFCLSID rclsId, LPCTSTR module, IUnknown *pouter)	
-{
-	IUnknownPtr punk;
-	LPFNGETCLASSOBJECT	pgco = NULL;
-	HMODULE hmod = module ? LoadLibrary(module) : GetModuleHandle(NULL);
-	if(hmod && (pgco = (LPFNGETCLASSOBJECT)GetProcAddress(hmod, "DllGetClassObject")))	{
-		IClassFactoryPtr pcf;
-		if( S_OK == pgco(rclsId, IID_IClassFactory, (void**)&pcf))	{
-			pcf->CreateInstance(pouter, IID_IUnknown, (void**)&punk);
-		}
-	}
-	return punk;
-}
-
 }

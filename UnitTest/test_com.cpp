@@ -8,7 +8,6 @@
 #include "../NScriptHost/NScript/NDispatch.h"
 
 #include "../NScriptHost/ComLite/ComLite.h"
-#include "../NScriptHost/ComLite/ClassFactory.h"
 
 #import "../NScriptHost/NScriptHost.tlb" no_namespace named_guids
 
@@ -49,10 +48,18 @@ struct __declspec(uuid("{1FD0A6FB-AFEB-47b7-AC31-879D4958D2BD}")) IDog : public 
 	virtual HRESULT Bark() = 0;
 };
 
-#define IID_ICat	__uuidof(ICat)
-#define IID_IDog	__uuidof(IDog)
+struct __declspec(uuid("{1FD0A6FB-AFEB-47b7-AC31-879D4958D2BE}")) IWelcome : public IUnknown {
+	virtual bool Init(const string& name, const string& welcome) = 0;
+	virtual string Welcome() = 0;
+};
+
+
+#define IID_ICat		__uuidof(ICat)
+#define IID_IDog		__uuidof(IDog)
+#define IID_IWelcome	__uuidof(IWelcome)
 _COM_SMARTPTR_TYPEDEF(ICat, IID_ICat);
 _COM_SMARTPTR_TYPEDEF(IDog, IID_IDog);
+_COM_SMARTPTR_TYPEDEF(IWelcome, IID_IWelcome);
 
 class CatImp : public com::Unknown, public ICat
 {
@@ -68,7 +75,7 @@ public:
 	HRESULT Bark() { return S_OK; }
 };
 
-class CatDogAggregated : public com::Unknown
+class CatDogAggregated1 : public com::Unknown
 {
 	IUnknownPtr	_cat;
 	IUnknownPtr	_dog;
@@ -122,24 +129,41 @@ public:
 	}
 };
 
+class WelcomeImp : public com::Unknown, public IWelcome
+{
+	string _name;
+	string _welcome;
+	void* GetInterface(REFIID iid) { return iid == IID_IWelcome ? static_cast<IWelcome*>(this) : NULL; }
+public:
+	bool Init(const string& name, const string& welcome) {
+		_name = name; _welcome = welcome;
+		return true;
+	}
+	string Welcome() { return _welcome + ", " + _name; }
+};
+
 HRESULT RegisterLibrary(LPCTSTR module)
 {
+	HRESULT hr = E_FAIL;
 	HMODULE hmod = LoadLibrary(module);
 	typedef HRESULT (STDAPICALLTYPE * LPFNREGISTERSERVER) (void);
 	LPFNREGISTERSERVER prs = NULL;
 	if(hmod && (prs = (LPFNREGISTERSERVER)GetProcAddress(hmod, "DllRegisterServer")))
-		return prs();
-	return E_FAIL;
+		hr = prs();
+	FreeLibrary(hmod);
+	return hr;
 }
 
 HRESULT UnregisterLibrary(LPCTSTR module)
 {
+	HRESULT hr = E_FAIL;
 	HMODULE hmod = LoadLibrary(module);
 	typedef HRESULT(STDAPICALLTYPE * LPFNUNREGISTERSERVER) (void);
 	LPFNUNREGISTERSERVER prs = NULL;
 	if (hmod && (prs = (LPFNUNREGISTERSERVER)GetProcAddress(hmod, "DllUnregisterServer")))
-		return prs();
-	return E_FAIL;
+		hr = prs();
+	FreeLibrary(hmod);
+	return hr;
 }
 
 namespace UnitTest
@@ -152,11 +176,12 @@ namespace UnitTest
 			Assert::AreEqual(S_OK, RegisterLibrary(TEXT("NScriptHost.dll")));
 			CoInitialize(NULL);
 		}
-
+		
 		TEST_CLASS_CLEANUP(Cleanup)
 		{
+			Assert::AreEqual(S_OK, UnregisterLibrary(TEXT("NScriptHost.dll")));
+			CoFreeUnusedLibrariesEx(0, 0);
 			CoUninitialize();
-			Assert::AreEqual(S_OK, RegisterLibrary(TEXT("NScriptHost.dll")));
 		}
 
 		void TestCall(INScriptPtr ns)
@@ -191,18 +216,28 @@ namespace UnitTest
 			Assert::IsNull<IDog>(IDogPtr(cat));
 			Assert::AreEqual(S_OK, cat->Meow());
 
-			// Create remote object
+			// Create and init
+			string msg;
+			IWelcomePtr w = com::CreateAndInitObject<com::Object<WelcomeImp>>("COM", "Hail");
+			Assert::IsNotNull<IWelcome>(w);
+			Assert::AreEqual("Hail, COM"s, w->Welcome());
+			Assert::IsTrue(com::CreateAndInitObject<com::Object<WelcomeImp>>(&w, "NScript", "Welcome"));
+			Assert::AreEqual("Welcome, NScript"s, w->Welcome());
+
+			// Use class factory to create remote object
 			TestCall(com::CreateInstance(CLSID_Parser, TEXT("NScriptHost.dll")));
 
-			// COM 
+			// Use COM to create object
 			TestCall(INScriptPtr("NScript"));
 			TestCall(INScriptPtr(CLSID_Parser));
+
+			FreeLibrary(GetModuleHandle(TEXT("NScriptHost.dll")));
 		}
 
 		TEST_METHOD(Aggregation)
 		{
 
-			TestAggregation(com::CreateObject<com::Object<CatDogAggregated>>());
+			TestAggregation(com::CreateObject<com::Object<CatDogAggregated1>>());
 			TestAggregation(com::CreateObject<com::Object<CatDogAggregated2>>());
 			TestAggregation(com::CreateObject<com::Object<CatDogContained>>());
 		}

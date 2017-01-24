@@ -40,8 +40,8 @@ protected:
 	// AddRef/Release wrapped version of the constructor that allows to create aggregates
 	virtual void Construct()					{};
 	// One of these two functions should be overwritten by derived object
-	virtual InterfaceEntry *GetInterfaceTable()	{return NULL;}
-	virtual void *GetInterface(REFIID iid)		{return NULL;}
+	virtual InterfaceEntry *GetInterfaceTable()	{return nullptr;}
+	virtual void *GetInterface(REFIID iid)		{return nullptr;}
 public:
 	typedef UnknownT<thread_model, lock_policy>	UnknownType;
 	IUnknown* GetUnknown()						{return static_cast<IUnknown*>(this);}
@@ -80,11 +80,11 @@ typedef UnknownT<>	Unknown;
 template<class T> class Object : public T
 {
 public:
-	Object(bool addref = false, IUnknown* pouter = NULL)	{Increment(); Construct(); if(!addref)	Decrement();}
+	Object(bool addref = false, IUnknown* pouter = nullptr)	{Increment(); Construct(); if(!addref)	Decrement();}
 	STDMETHODIMP_(ULONG) AddRef()							{return IntAddRef(); }
 	STDMETHODIMP_(ULONG) Release()							{return IntRelease();}
 	STDMETHODIMP QueryInterface(REFIID iid, void ** ppvObj)	{return IntQueryInterface(iid, ppvObj);}
-	operator IUnknown*()									{return NULL;}
+	operator IUnknown*()									{return nullptr;}
 };
 
 // Aggregated COM object implementation (handles outer IUnknown interface)
@@ -94,7 +94,7 @@ template<class T> class ObjectAgg : public Object<typename T::UnknownType>
 {
 	typedef bool aggregatable;
 public:
-	ObjectAgg(bool addref = false, IUnknown* pouter = NULL) : Object(addref), _contained(pouter ? pouter : this)	{}
+	ObjectAgg(bool addref = false, IUnknown* pouter = nullptr) : Object(addref), _contained(pouter ? pouter : this)	{}
 	STDMETHODIMP QueryInterface(REFIID iid, void ** ppvObj)	{
 		return iid == IID_IUnknown ? IntQueryInterface(iid, ppvObj) : _contained.IntQueryInterface(iid, ppvObj);
 	}
@@ -113,11 +113,32 @@ protected:
 };
 #pragma warning(pop)
 
-template<class T> T* CreateObject(bool addref = false, IUnknown *pouter = NULL)	{return new T(addref, pouter);}
+template<class T> T* CreateObject(bool addref = false, IUnknown *pouter = nullptr)	{return new T(addref, pouter);}
 
-template<class T, class I, class... ARGS> bool InitObject(I **pobj, ARGS&&... args) {
-	if (!pobj || !(*pobj = com::CreateObject<T>(true)))	return false;
+template<class T, class... ARGS> T* CreateAndInitObject(ARGS&&... args) {
+	T *pobj = com::CreateObject<T>();
+	if(pobj)	pobj->Init(std::forward<ARGS>(args)...);
+	return pobj;
+}
+
+template<class T, class I, class... ARGS> bool CreateAndInitObject(I **pobj, ARGS&&... args) {
+	if(nullptr == pobj || *pobj)			return false;
+	if(nullptr == (*pobj = new T(true)))	return false;
 	return (*pobj)->Init(std::forward<ARGS>(args)...);
 }
+
+IUnknownPtr CreateInstance(REFCLSID rclsId, LPCTSTR module = nullptr, IUnknown *pouter = nullptr)
+{
+	IUnknownPtr punk;
+	LPFNGETCLASSOBJECT	pgco = nullptr;
+	HMODULE hmod = module ? LoadLibrary(module) : GetModuleHandle(NULL);
+	if(hmod && (pgco = (LPFNGETCLASSOBJECT)GetProcAddress(hmod, "DllGetClassObject"))) {
+		IClassFactoryPtr pcf;
+		if(S_OK == pgco(rclsId, IID_IClassFactory, (void**)&pcf)) {
+			pcf->CreateInstance(pouter, IID_IUnknown, (void**)&punk);
+		}
+	}
+	return punk;
+};
 
 }
