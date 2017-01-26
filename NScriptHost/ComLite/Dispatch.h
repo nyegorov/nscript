@@ -71,7 +71,7 @@ protected:
 		if(!_typeInfo)	{
 			idata.cMembers = 0;
 			LPMETHODDATA pm = mdata;
-			for(DispatchEntry *pe = GetDispatchMap(); pe && pe->method.dispid; pe++, pm++)	{
+			for(DispatchEntry *pe = GetDispatchTable(); pe && pe->method.dispid; pe++, pm++)	{
 				if(++idata.cMembers > MAX_ENTRIES)	break;
 				*pm = pe->method;
 				pm->ppdata = pe->params;
@@ -82,10 +82,10 @@ protected:
 		return _typeInfo;
 	}
 
-	template <typename F> DispatchEntry DispMethod(UINT type, DISPID id, LPOLESTR name, F func, VARTYPE resultType, ...)
+	template <typename F> DispatchEntry DispEntry(WORD type, DISPID id, LPOLESTR name, VARTYPE resultType, F func, ...)
 	{
 		va_list args;
-		va_start(args, resultType);
+		va_start(args, func);
 		DispatchEntry di = {{name, NULL, id, vtbl_offset<I>(func), CC_STDCALL, 0, type, resultType}, {NULL, VT_EMPTY}};
 		unsigned i;
 		for(i=0; i<MAX_PARAMS; i++)	{
@@ -98,7 +98,24 @@ protected:
 		return di;
 	}
 
-	virtual DispatchEntry* GetDispatchMap()		{return NULL;}
+	template <typename... F> DispatchEntry DispPropGet(DISPID id, LPOLESTR name, VARTYPE type, F... func)
+	{
+		return DispEntry(DISPATCH_PROPERTYGET, id, name, type, func..., NULL);
+	}
+	template <typename F> DispatchEntry DispPropPut(DISPID id, LPOLESTR name, VARTYPE type, F func)
+	{
+		return DispEntry(DISPATCH_PROPERTYPUT, id, name, VT_EMPTY, func, name, type, NULL);
+	}
+	template <typename F> DispatchEntry DispPropSet(DISPID id, LPOLESTR name, VARTYPE type, F func)
+	{
+		return DispEntry(DISPATCH_PROPERTYPUTREF, id, name, VT_EMPTY, func, name, type, NULL);
+	}
+	template <typename... F> DispatchEntry DispMethod(DISPID id, LPOLESTR name, VARTYPE resultType, F... func)
+	{
+		return DispEntry(DISPATCH_METHOD, id, name, resultType, func..., NULL);
+	}
+
+	virtual DispatchEntry* GetDispatchTable()		{return NULL;}
 };
 
 template <class I> struct embedded		{

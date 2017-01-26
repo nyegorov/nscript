@@ -3,6 +3,7 @@
 #include <ActivScp.h>
 #include <comdef.h>
 #include <comdefsp.h>
+#include <map>
 
 #define IActiveScriptParse	IActiveScriptParse32
 _COM_SMARTPTR_TYPEDEF(IActiveScriptParse, __uuidof(IActiveScriptParse));
@@ -18,6 +19,7 @@ public:
 	bool Init(const IID scriptId);
 	void AddVariable(LPCWSTR szName, const _variant_t& vValue);
 	void AddFunction(LPCWSTR szName, LPCWSTR aszArgs[], LPCWSTR szBody);
+	void AddObject(LPCWSTR szName, IDispatch *pdisp);
 	_variant_t Exec(_bstr_t sScript, bool bRunScript = false);
 	void Close();
 protected:
@@ -39,4 +41,5 @@ private:
 	IActiveScriptPtr		m_pEngine;
 	IActiveScriptParsePtr	m_pParser;
 	IID						m_scriptId;
+	std::map<std::wstring, IDispatchPtr>	m_mapObjects;
 };

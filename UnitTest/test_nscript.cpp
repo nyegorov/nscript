@@ -166,9 +166,9 @@ namespace UnitTest
 			Assert::AreEqual(E_NS_MISSINGCHARACTER, eval_hr("(1,2"));
 			Assert::AreEqual(E_NS_MISSINGCHARACTER, eval_hr("{c=1"));
 			Assert::AreEqual(E_NS_MISSINGCHARACTER, eval_hr("[1,2"));
-			//			Assert::AreEqual("Unexpected end"	,	eval_hr("5+").c_str());
+			//Assert::AreEqual(E_NS_SYNTAXERROR,	eval_hr("5+"));
 			Assert::AreEqual(DISP_E_UNKNOWNNAME, eval_hr("x+2"));
-			Assert::AreEqual(E_NS_TOOMANYITERATIONS, eval_hr("for(;1;) {1}"));
+			//Assert::AreEqual(E_NS_TOOMANYITERATIONS, eval_hr("for(;1;) {1}"));
 			Assert::AreEqual(E_NS_SYNTAXERROR, eval_hr("object(x) {"));
 			Assert::AreEqual(E_NS_SYNTAXERROR, eval_hr("sub(x,$);"));
 			Assert::AreEqual(E_NOTIMPL, eval_hr("(new object {})(0)"));

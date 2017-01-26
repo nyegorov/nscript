@@ -24,6 +24,12 @@ CVbScript::~CVbScript(void)
 	Close();
 }
 
+void CVbScript::AddObject(LPCWSTR szName, IDispatch *pdisp)
+{
+	m_pEngine->AddNamedItem(szName, SCRIPTITEM_ISVISIBLE);
+	m_mapObjects[szName] = IDispatchPtr(pdisp);
+}
+
 void CVbScript::AddFunction(LPCWSTR szName, LPCWSTR aszArgs[], LPCWSTR szBody)
 {
 	if(m_pEngine != NULL)	{
@@ -89,6 +95,11 @@ STDMETHODIMP CVbScript::QueryInterface(REFIID iid, LPVOID* ppvObj)
 
 STDMETHODIMP CVbScript::GetItemInfo(LPCOLESTR pstrName, DWORD dwReturnMask, IUnknown **ppiunkItem, ITypeInfo **ppti)
 {
+	IDispatchPtr pdisp = m_mapObjects[pstrName];
+	if(pdisp && dwReturnMask == SCRIPTINFO_IUNKNOWN && ppiunkItem) {
+		*ppiunkItem = IUnknownPtr(pdisp);
+		return S_OK;
+	}
 	return TYPE_E_ELEMENTNOTFOUND;
 }
 

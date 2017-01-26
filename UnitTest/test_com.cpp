@@ -8,11 +8,12 @@
 #include "../NScriptHost/NScript/NDispatch.h"
 
 #include "../NScriptHost/ComLite/ComLite.h"
+#include "../NScriptHost/ComLite/Dispatch.h"
 
 #import "../NScriptHost/NScriptHost.tlb" no_namespace named_guids
 
 const char vb_script[] = R"(
-dim result
+dim res_remote, res_local
 
 class hallo
 	function hail(name1, name2)
@@ -23,12 +24,21 @@ end class
 sub test_nscript
 	dim ns, hal
 	set ns = createobject("NScript")
-	ns.addobject "name", "VBScript"
+	ns.addobject "name", "NScript"
 	ns.addobject "hallo", new hallo
-	result = ns.exec("hallo.hail(name, 'NScript') + '!'")
+	res_remote = ns.exec("hallo.hail(name, 'VBScript') + '!'")
+end sub
+
+sub test_callback
+	dim s1, s2
+	Welc.Name = "VBScript"
+	s1 = Welc.Welcome
+	s2 = Welc.SayHello(Welc.Name, "Hallo")
+	if s1 = s2 then res_local = s1
 end sub
 
 test_nscript
+test_callback
 )";
 
 const wchar_t apt_test[] = L"str(thread_id()) + ' -> ' + str(callback_id())";
@@ -48,9 +58,12 @@ struct __declspec(uuid("{1FD0A6FB-AFEB-47b7-AC31-879D4958D2BD}")) IDog : public 
 	virtual HRESULT Bark() = 0;
 };
 
-struct __declspec(uuid("{1FD0A6FB-AFEB-47b7-AC31-879D4958D2BE}")) IWelcome : public IUnknown {
+struct __declspec(uuid("{1FD0A6FB-AFEB-47b7-AC31-879D4958D2BE}")) IWelcome : public IDispatch {
 	virtual bool Init(const string& name, const string& welcome) = 0;
-	virtual string Welcome() = 0;
+	virtual BSTR _stdcall getName()				= 0;
+	virtual void _stdcall setName(BSTR name)	= 0;
+	virtual BSTR _stdcall Welcome()				= 0;
+	virtual BSTR _stdcall SayHello(BSTR name, BSTR message) = 0;
 };
 
 
@@ -129,17 +142,40 @@ public:
 	}
 };
 
-class WelcomeImp : public com::Unknown, public IWelcome
+class WelcomeImp : public com::Unknown, public com::Dispatch<IWelcome>
 {
-	string _name;
-	string _welcome;
+	bstr_t _name;
+	bstr_t _welcome;
 	void* GetInterface(REFIID iid) { return iid == IID_IWelcome ? static_cast<IWelcome*>(this) : NULL; }
+
+	InterfaceEntry* GetInterfaceTable() {
+		static InterfaceEntry table[] = {
+			Interface<IWelcome>(this),
+			Interface<IDispatch>(this),
+			NULL
+		};
+		return table;
+	}
+
+	DispatchEntry* GetDispatchTable() {
+		static DispatchEntry table[] = {
+			DispPropGet(1, L"Name",	VT_BSTR, &IWelcome::getName),
+			DispPropPut(1, L"Name",	VT_BSTR, &IWelcome::setName),
+			DispMethod( 2, L"Welcome", VT_BSTR, &IWelcome::Welcome),
+			DispMethod( 3, L"SayHello", VT_BSTR, &IWelcome::SayHello, L"Name", VT_BSTR, L"Message", VT_BSTR),
+			NULL
+		};
+		return table;
+	}
 public:
 	bool Init(const string& name, const string& welcome) {
-		_name = name; _welcome = welcome;
+		_name = name.c_str(); _welcome = welcome.c_str();
 		return true;
 	}
-	string Welcome() { return _welcome + ", " + _name; }
+	BSTR _stdcall Welcome()	{ return (_welcome + ", " + _name + "!").Detach(); }
+	BSTR _stdcall SayHello(BSTR name, BSTR message) { return (bstr_t(message) + ", " + bstr_t(name) + "!").Detach(); }
+	BSTR _stdcall getName() { bstr_t n(_name, true);  return n.Detach(); }
+	void _stdcall setName(BSTR name) { _name = name; }
 };
 
 HRESULT RegisterLibrary(LPCTSTR module)
@@ -220,9 +256,9 @@ namespace UnitTest
 			string msg;
 			IWelcomePtr w = com::CreateAndInitObject<com::Object<WelcomeImp>>("COM", "Hail");
 			Assert::IsNotNull<IWelcome>(w);
-			Assert::AreEqual("Hail, COM"s, w->Welcome());
+			Assert::AreEqual(bstr_t("Hail, COM!"), w->Welcome());
 			Assert::IsTrue(com::CreateAndInitObject<com::Object<WelcomeImp>>(&w, "NScript", "Welcome"));
-			Assert::AreEqual("Welcome, NScript"s, w->Welcome());
+			Assert::AreEqual(bstr_t("Welcome, NScript!"), w->Welcome());
 
 			// Use class factory to create remote object
 			TestCall(com::CreateInstance(CLSID_Parser, TEXT("NScriptHost.dll")));
@@ -244,11 +280,16 @@ namespace UnitTest
 
 		TEST_METHOD(Dispatch)
 		{
+			// Test Dispatch calls from VBScript code into local and remote COM objects
+			IWelcomePtr wp = com::CreateAndInitObject<com::Object<WelcomeImp>>("COM", "Hallo");
 			CVbScript vbs;
 			vbs.Init(CLSID_VBScript);
+			vbs.AddObject(L"Welc", IDispatchPtr(wp));
 			vbs.Exec(vb_script, true);
-			variant_t res = vbs.Exec("result");
-			Assert::AreEqual((LPCWSTR)bstr_t(res), L"NScript hails VBScript!");
+			variant_t res_remote = vbs.Exec("res_remote");
+			variant_t res_local  = vbs.Exec("res_local");
+			Assert::AreEqual(L"VBScript hails NScript!", (LPCWSTR)bstr_t(res_remote));
+			Assert::AreEqual(L"Hallo, VBScript!",		 (LPCWSTR)bstr_t(res_local));
 		}
 
 		TEST_METHOD(TypeLib)
@@ -281,12 +322,9 @@ namespace UnitTest
 				CoUninitialize();
 			});
 
-			MSG msg;
+			DWORD dwIndex;
 			HANDLE handle = t.native_handle();
-			while (MsgWaitForMultipleObjectsEx(1, &handle, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE) != WAIT_OBJECT_0) {
-				GetMessage(&msg, NULL, 0, 0);
-				DispatchMessage(&msg);
-			}
+			CoWaitForMultipleHandles(COWAIT_DISPATCH_CALLS, INFINITE, 1, &handle, &dwIndex);
 			t.join();
 			Assert::AreEqual(4l, (long)res);
 		}
@@ -324,18 +362,9 @@ namespace UnitTest
 				res[3].assign(os.str(), (unsigned)os.pcount());
 			}
 
-			MSG msg;
+			DWORD dwIndex;
 			HANDLE handles[3] = { sta.native_handle(), mta1.native_handle(), mta2.native_handle() };
-			DWORD ret, count = 0;
-			do {
-				ret = MsgWaitForMultipleObjectsEx(3, handles, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
-				if (ret < WAIT_OBJECT_0 + 3) {
-					count++;
-				} else if (ret < WAIT_OBJECT_0 + 6) {
-					GetMessage(&msg, NULL, 0, 0);
-					DispatchMessage(&msg);
-				}
-			} while (count < 3);
+			for(int i = 0; i<3; i++)	CoWaitForMultipleHandles(COWAIT_DISPATCH_CALLS, INFINITE, 1, &handles[i], &dwIndex);
 			sta.join();
 			mta1.join();
 			mta2.join();
