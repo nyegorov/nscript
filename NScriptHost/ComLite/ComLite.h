@@ -121,10 +121,11 @@ template<class T, class... ARGS> T* CreateAndInitObject(ARGS&&... args) {
 	return pobj;
 }
 
-template<class T, class I, class... ARGS> bool CreateAndInitObject(I **pobj, ARGS&&... args) {
-	if(nullptr == pobj || *pobj)			return false;
-	if(nullptr == (*pobj = new T(true)))	return false;
-	return (*pobj)->Init(std::forward<ARGS>(args)...);
+template<class T, class I, class... ARGS> bool CreateAndInitObject(I **ppobj, ARGS&&... args) {
+	if(nullptr == ppobj || *ppobj)	return false;
+	*ppobj = com::CreateObject<T>(true);
+	if(nullptr == *ppobj)			return false;
+	return (*ppobj)->Init(std::forward<ARGS>(args)...);
 }
 
 IUnknownPtr CreateInstance(REFCLSID rclsId, LPCTSTR module = nullptr, IUnknown *pouter = nullptr)
