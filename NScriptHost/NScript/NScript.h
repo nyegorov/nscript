@@ -88,12 +88,12 @@ public:
 private:
 	typedef std::map<tstring, Token, lessi> Keywords;
 	static Keywords	_keywords;
-	static tchar	_decpt;
+	tchar			_decpt = std::use_facet<std::numpunct<tchar>>(std::locale()).decimal_point();
 
 	Token			_token;
 	tstring			_content;
-	State			_pos;
-	State			_lastpos;
+	State			_pos = 0;
+	State			_lastpos = 0;
 	variant_t		_value;
 	tstring			_name;
 	ArgList			_args;

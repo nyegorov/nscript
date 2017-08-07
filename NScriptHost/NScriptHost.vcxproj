@@ -22,7 +22,7 @@
     <ProjectGuid>{F90C4C74-DEE4-4880-9DD0-4F3413B16B32}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>NScriptHost</RootNamespace>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

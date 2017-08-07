@@ -307,72 +307,71 @@ struct copy_var {
 	void operator() (const tstring& name) {variant_t v; if(_from->Get(name, v))	_to->Set(name, v);}
 };
 
-Context::vars_t	Context::_globals;
+Context::vars_t	Context::_globals = {
+	{ TEXT("empty"),	variant_t()},
+	{ TEXT("true"),		true},
+	{ TEXT("false"),	false },
+	{ TEXT("optional"),	variant_t(DISP_E_PARAMNOTFOUND, VT_ERROR) },
+	// Conversion
+	{ TEXT("int"),		new BuiltinFunction(1, FnCvt<VT_I4, LOCALE_INVARIANT>) },
+	{ TEXT("dbl"),		new BuiltinFunction(1, FnCvt<VT_R8, LOCALE_INVARIANT>) },
+	{ TEXT("str"),		new BuiltinFunction(1, FnCvt<VT_BSTR, LOCALE_USER_DEFAULT>) },
+	{ TEXT("date"),		new BuiltinFunction(1, FnCvt<VT_DATE, LOCALE_USER_DEFAULT>) },
+	// Date
+	{ TEXT("now"),		new BuiltinFunction(0, FnNow) },
+	{ TEXT("day"),		new BuiltinFunction(1, FnDay) },
+	{ TEXT("month"),	new BuiltinFunction(1, FnMonth) },
+	{ TEXT("year"),		new BuiltinFunction(1, FnYear) },
+	{ TEXT("hour"),		new BuiltinFunction(1, FnHour) },
+	{ TEXT("minute"),	new BuiltinFunction(1, FnMinute) },
+	{ TEXT("second"),	new BuiltinFunction(1, FnSecond) },
+	{ TEXT("dayofweek"),new BuiltinFunction(1, FnDayOfWeek) },
+	{ TEXT("dayofyear"),new BuiltinFunction(1, FnDayOfYear) },
+	// Math
+	{ TEXT("pi"),		new BuiltinFunction(0, FnPi) },
+	{ TEXT("rnd"),		new BuiltinFunction(0, FnRnd) },
+	{ TEXT("sin"),		new BuiltinFunction(1, FnX<double,  sin>) },
+	{ TEXT("cos"),		new BuiltinFunction(1, FnX<double,  cos>) },
+	{ TEXT("tan"),		new BuiltinFunction(1, FnX<double,  tan>) },
+	{ TEXT("atan"),		new BuiltinFunction(1, FnX<double, atan>) },
+	{ TEXT("abs"),		new BuiltinFunction(1, FnX<double, fabs>) },
+	{ TEXT("exp"),		new BuiltinFunction(1, FnX<double,  exp>) },
+	{ TEXT("log"),		new BuiltinFunction(1, FnX<double,  log>) },
+	{ TEXT("sqr"),		new BuiltinFunction(1, FnX<double, sqrt>) },
+	{ TEXT("sqrt"),		new BuiltinFunction(1, FnX<double, sqrt>) },
+	{ TEXT("atan2"),	new BuiltinFunction(2, FnAtan2) },
+	{ TEXT("sgn"),		new BuiltinFunction(1, FnSgn) },
+	{ TEXT("fract"),	new BuiltinFunction(1, FnFract) },
+	// String
+	{ TEXT("chr"),		new BuiltinFunction(1, FnChr) },
+	{ TEXT("asc"),		new BuiltinFunction(1, FnAsc) },
+	{ TEXT("len"),		new BuiltinFunction(1, FnLen) },
+	{ TEXT("left"),		new BuiltinFunction(2, FnLeft) },
+	{ TEXT("right"),	new BuiltinFunction(2, FnRight) },
+	{ TEXT("mid"),		new BuiltinFunction(3, FnMid) },
+	{ TEXT("upper"),	new BuiltinFunction(1, FnUpper) },
+	{ TEXT("lower"),	new BuiltinFunction(1, FnLower) },
+	{ TEXT("string"),	new BuiltinFunction(2, FnString) },
+	{ TEXT("replace"),	new BuiltinFunction(3, FnReplace) },
+	{ TEXT("instr"),	new BuiltinFunction(2, FnInstr) },
+	{ TEXT("format"),	new BuiltinFunction(2, FnFormat) },
+	{ TEXT("hex"),		new BuiltinFunction(1, FnHex) },
+	// Array
+	{ TEXT("add"),		new BuiltinFunction(2, FnAdd) },
+	{ TEXT("remove"),	new BuiltinFunction(2, FnRemove) },
+	// Other
+	{ TEXT("size"),		new BuiltinFunction(-1, FnSize) },
+	{ TEXT("rgb"),		new BuiltinFunction(3,  FnRgb) },
+	{ TEXT("min"),		new BuiltinFunction(-1, FnFind<VARCMP_LT>) },
+	{ TEXT("max"),		new BuiltinFunction(-1, FnFind<VARCMP_GT>) },
+};
+
 Context::Context(const Context *base, const VarNames *vars) : _locals(1)
 {
-	if(base)	
+	if(base) {
 		if(vars)	std::for_each(vars->begin(), vars->end(), copy_var(base, this));
 		else		_locals.assign(base->_locals.begin(), base->_locals.end());
 		//_locals[0] = base->_locals[0];
-	if(_globals.empty())	{
-		// Constants
-		typedef vars_t::value_type pair;
-		_globals.insert(pair(TEXT("empty"),		variant_t()));
-		_globals.insert(pair(TEXT("true"),		true));
-		_globals.insert(pair(TEXT("false"),		false));
-		_globals.insert(pair(TEXT("optional"),	variant_t(DISP_E_PARAMNOTFOUND, VT_ERROR)));
-		// Conversion
-		_globals.insert(pair(TEXT("int"),		new BuiltinFunction( 1, FnCvt<VT_I4, LOCALE_INVARIANT>  )));
-		_globals.insert(pair(TEXT("dbl"),		new BuiltinFunction( 1, FnCvt<VT_R8, LOCALE_INVARIANT>  )));
-		_globals.insert(pair(TEXT("str"),		new BuiltinFunction( 1, FnCvt<VT_BSTR, LOCALE_USER_DEFAULT>)));
-		_globals.insert(pair(TEXT("date"),		new BuiltinFunction( 1, FnCvt<VT_DATE, LOCALE_USER_DEFAULT>)));
-		// Date
-		_globals.insert(pair(TEXT("now"),		new BuiltinFunction( 0, FnNow)));
-		_globals.insert(pair(TEXT("day"),		new BuiltinFunction( 1, FnDay)));
-		_globals.insert(pair(TEXT("month"),		new BuiltinFunction( 1, FnMonth)));
-		_globals.insert(pair(TEXT("year"),		new BuiltinFunction( 1, FnYear)));
-		_globals.insert(pair(TEXT("hour"),		new BuiltinFunction( 1, FnHour)));
-		_globals.insert(pair(TEXT("minute"),	new BuiltinFunction( 1, FnMinute)));
-		_globals.insert(pair(TEXT("second"),	new BuiltinFunction( 1, FnSecond)));
-		_globals.insert(pair(TEXT("dayofweek"),	new BuiltinFunction( 1, FnDayOfWeek)));
-		_globals.insert(pair(TEXT("dayofyear"),	new BuiltinFunction( 1, FnDayOfYear)));
-		// Math
-		_globals.insert(pair(TEXT("pi"),		new BuiltinFunction( 0, FnPi)));
-		_globals.insert(pair(TEXT("rnd"),		new BuiltinFunction( 0, FnRnd)));
-		_globals.insert(pair(TEXT("sin"),		new BuiltinFunction( 1, FnX<double,  sin>)));
-		_globals.insert(pair(TEXT("cos"),		new BuiltinFunction( 1, FnX<double,  cos>)));
-		_globals.insert(pair(TEXT("tan"),		new BuiltinFunction( 1, FnX<double,  tan>)));
-		_globals.insert(pair(TEXT("atan"),		new BuiltinFunction( 1, FnX<double, atan>)));
-		_globals.insert(pair(TEXT("abs"),		new BuiltinFunction( 1, FnX<double, fabs>)));
-		_globals.insert(pair(TEXT("exp"),		new BuiltinFunction( 1, FnX<double,  exp>)));
-		_globals.insert(pair(TEXT("log"),		new BuiltinFunction( 1, FnX<double,  log>)));
-		_globals.insert(pair(TEXT("sqr"),		new BuiltinFunction( 1, FnX<double, sqrt>)));
-		_globals.insert(pair(TEXT("sqrt"),		new BuiltinFunction( 1, FnX<double, sqrt>)));
-		_globals.insert(pair(TEXT("atan2"),		new BuiltinFunction( 2, FnAtan2)));
-		_globals.insert(pair(TEXT("sgn"),		new BuiltinFunction( 1, FnSgn)));
-		_globals.insert(pair(TEXT("fract"),		new BuiltinFunction( 1, FnFract)));
-		// String
-		_globals.insert(pair(TEXT("chr"),		new BuiltinFunction( 1, FnChr)));
-		_globals.insert(pair(TEXT("asc"),		new BuiltinFunction( 1, FnAsc)));
-		_globals.insert(pair(TEXT("len"),		new BuiltinFunction( 1, FnLen)));
-		_globals.insert(pair(TEXT("left"),		new BuiltinFunction( 2, FnLeft)));
-		_globals.insert(pair(TEXT("right"),		new BuiltinFunction( 2, FnRight)));
-		_globals.insert(pair(TEXT("mid"),		new BuiltinFunction( 3, FnMid)));
-		_globals.insert(pair(TEXT("upper"),		new BuiltinFunction( 1, FnUpper)));
-		_globals.insert(pair(TEXT("lower"),		new BuiltinFunction( 1, FnLower)));
-		_globals.insert(pair(TEXT("string"),	new BuiltinFunction( 2, FnString)));
-		_globals.insert(pair(TEXT("replace"),	new BuiltinFunction( 3, FnReplace)));
-		_globals.insert(pair(TEXT("instr"),		new BuiltinFunction( 2, FnInstr)));
-		_globals.insert(pair(TEXT("format"),	new BuiltinFunction( 2, FnFormat)));
-		_globals.insert(pair(TEXT("hex"),		new BuiltinFunction( 1, FnHex)));
-		// Array
-		_globals.insert(pair(TEXT("add"),		new BuiltinFunction( 2, FnAdd)));
-		_globals.insert(pair(TEXT("remove"),	new BuiltinFunction( 2, FnRemove)));
-		// Other
-		_globals.insert(pair(TEXT("size"),		new BuiltinFunction(-1, FnSize)));
-		_globals.insert(pair(TEXT("rgb"),		new BuiltinFunction( 3, FnRgb)));
-		_globals.insert(pair(TEXT("min"),		new BuiltinFunction(-1, FnFind<VARCMP_LT> )));
-		_globals.insert(pair(TEXT("max"),		new BuiltinFunction(-1, FnFind<VARCMP_GT> )));
 	}
 }
 
@@ -621,24 +620,19 @@ again:
 
 // Parser
 
-Parser::Keywords Parser::_keywords;
-tchar Parser::_decpt;
+Parser::Keywords Parser::_keywords = {
+	{ TEXT("for"),		Parser::forloop },
+	{ TEXT("if"),		Parser::iffunc },
+	{ TEXT("else"),		Parser::ifelse },
+	{ TEXT("sub"),		Parser::func },
+	{ TEXT("object"),	Parser::object },
+	{ TEXT("new"),		Parser::newobj },
+	{ TEXT("my"),		Parser::my },
+};
 
 Parser::Parser() {
-	if(_keywords.empty())	{
-		_keywords[TEXT("for")]		= Parser::forloop;
-		_keywords[TEXT("if")]		= Parser::iffunc;
-		_keywords[TEXT("else")]		= Parser::ifelse;
-		_keywords[TEXT("sub")]		= Parser::func;
-		_keywords[TEXT("object")]	= Parser::object;
-		_keywords[TEXT("new")]		= Parser::newobj;
-		_keywords[TEXT("my")]		= Parser::my;
-		_decpt = std::use_facet<std::numpunct<tchar> >(std::locale()).decimal_point();
-		srand((unsigned)time(NULL));
-	}
 	_temp.reserve(32);
 	_name.reserve(32);
-	_pos = _lastpos = 0;
 }
 
 Parser::Token Parser::Next()
