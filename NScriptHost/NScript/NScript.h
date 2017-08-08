@@ -72,7 +72,7 @@ class Parser	{
 public:
 	typedef std::vector<tstring>	ArgList;
 	typedef size_t	State;
-	enum Token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar, my};
+	enum Token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon};
 
 	Parser();
 	void Init(const tchar* expr){if(expr)	_content = expr;SetState(0);}
@@ -122,7 +122,7 @@ protected:
 	enum Precedence	{Script = 0,Statement,Assignment,Conditional,Logical,Binary,Equality,Relation,Addition,Multiplication,Power,Unary,Functional,Primary,Term};
 	void Parse(Precedence level, variant_t& result, bool skip);
 	void Parse(Precedence level, Parser::State state, variant_t& result);
-	void ParseIf(variant_t& result, bool skip);
+	void ParseIf(Precedence level, variant_t& result, bool skip);
 	void ParseForLoop(variant_t& result, bool skip);
 	void ParseFunc(variant_t& result, bool skip);
 	void ParseObj(variant_t& result, bool skip);
@@ -170,15 +170,16 @@ public:
 	void Put(long index, const variant_t& value, bool forceArray = false);
 	void Add(const variant_t& value)				{Put(Count(), value);}
 	void Redim(long size);
+	void Merge(const variant_t& value);
 	void Get(long index, variant_t& value) const;
 	long Count() const;
 	variant_t* GetData();
 	variant_t& operator [](long index);
-	void FreeData();
 
 protected:
-	bool IsArray() const	{return V_ISARRAY(&_sa) != 0;}
-	bool IsEmpty() const	{return V_VT(&_sa) == VT_EMPTY;}
+	bool IsArray() const { return V_ISARRAY(&_sa) != 0; }
+	bool IsEmpty() const { return V_VT(&_sa) == VT_EMPTY; }
+
 	variant_t&	_sa;
 	int			_count;
 };

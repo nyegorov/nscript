@@ -19,13 +19,13 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -63,11 +63,12 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ObjectFileName>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(SolutionDir)Build\$(Configuration)\pdb\$(ProjectName).pdb</ProgramDataBaseFileName>
+      <PrecompiledHeaderOutputFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(ProjectName).pch</PrecompiledHeaderOutputFile>
     </ClCompile>
     <Link>
       <AdditionalDependencies>rpcrt4.lib;libcmtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>NScriptProxy.def</ModuleDefinitionFile>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX86</TargetMachine>
       <ManifestFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest</ManifestFile>
@@ -86,11 +87,12 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ObjectFileName>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(SolutionDir)Build\$(Configuration)\pdb\$(ProjectName).pdb</ProgramDataBaseFileName>
+      <PrecompiledHeaderOutputFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(ProjectName).pch</PrecompiledHeaderOutputFile>
     </ClCompile>
     <Link>
       <AdditionalDependencies>rpcrt4.lib;libcmt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>NScriptProxy.def</ModuleDefinitionFile>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>

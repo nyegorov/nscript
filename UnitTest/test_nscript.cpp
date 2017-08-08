@@ -137,6 +137,19 @@ namespace UnitTest
 			Assert::AreEqual("3", eval("m=new map; m['abc']=3; m['abc']").c_str());
 			Assert::AreEqual("", eval("m=map; mm=new m; mm[0]").c_str());
 		}
+		TEST_METHOD(Functional)
+		{
+			Assert::AreEqual("15", eval("sum = fold(sub(x,y) x+y, 0); sum([4,5,6])").c_str());
+			Assert::AreEqual("36", eval("fold(sub(x,y) x*y, 1)(fmap(sub @^2)([1,2,3]))").c_str());
+			Assert::AreEqual("50", eval("square = sub(x) x^2; plus = sub(x,y) x+y; [3, 4, 5] | fmap(square) | fold(plus, 0)").c_str());
+			Assert::AreEqual("brothers,in,metal", eval("join = sub(s) sub() tail(@) | fold(sub(x, y) x + s + y, head(@)); ['brothers', 'in', 'metal'] | join(',')").c_str());
+			Assert::AreEqual("BROTHERS=IN=ARMS", eval(R"(
+				join  = sub(c)    sub tail(@) | fold(sub(x, y) x + c + y, head(@));
+				split = sub(s, c) (n = instr(s, c)) < 0 ? s : [left(s, n):split(mid(s, n + 1, len(s) - n), c)];
+				split('brothers in arms', ' ') | fmap(upper) | join('=')
+			)").c_str());
+
+		}
 		TEST_METHOD(Classes)
 		{
 			Assert::AreEqual("1", eval("f=sub {1?new object{x=1}:0};f().x").c_str());

@@ -126,6 +126,13 @@ void SafeArray::Get(long index, variant_t& value) const	{
 	else if(index == 0 && !IsEmpty())	value = _sa;
 	else			Check(DISP_E_BADINDEX);
 };
+
+void SafeArray::Merge(const variant_t& value)
+{
+	SafeArray right(const_cast<variant_t&>(value));
+	for(long i = 0; i < right.Count(); i++)	Add(right[i]);
+}
+
 long SafeArray::Count() const		{
 	long ubound = 0;
 	if(IsEmpty())		ubound = -1;
@@ -195,7 +202,15 @@ void OpIDiv(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarIdiv(&*
 void OpMod(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarMod(&*op1, &*op2, &result));}
 void OpPow(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarPow(&*op1, &*op2, &result));}
 void OpAnd(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarAnd(&*op1, &*op2, &result));}
-void OpOr(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarOr(&*op1, &*op2, &result));}
+void OpOr(variant_t& op1, variant_t& op2, variant_t& result)	{
+	auto hr = VarOr(&*op1, &*op2, &result);
+	if(FAILED(hr)) {
+		IObjectPtr pobj = GetObject(op2);
+		if(pobj)	Check(pobj->Call(*op1, result));
+		return;
+	}
+	Check(hr);
+}
 void OpGT(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)==VARCMP_GT;}
 void OpGE(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)>=VARCMP_GT;}
 void OpLT(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)==VARCMP_LT;}
@@ -213,6 +228,7 @@ void OpIndex(variant_t& op1, variant_t& op2, variant_t& result)	{
 	if(pobj)	Check(pobj->Index(*op2, result));	else	SafeArray(op1).Get(*op2, result);
 	//if(pobj == NULL || FAILED(pobj->Index(*op2, result)))	SafeArray(op1).Get(*op2, result);
 }
+void OpJoin(variant_t& op1, variant_t& op2, variant_t& result)	{ SafeArray a(result = *op1); a.Merge(*op2); }
 void OpCall(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op1)->Call(*op2, result));}
 void OpAssign(variant_t& op1, variant_t& op2, variant_t& result){Check(IObjectPtr(op1)->Set(*op2));result = op1;}
 void OpItem(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op1)->Item(*op2, result));}
@@ -286,6 +302,55 @@ void FnRemove(int n, const variant_t v[], variant_t& result)	{
 	}
 	a.Redim(a.Count()-1);
 }
+
+class FoldFunction : public Object
+{
+	IObjectPtr	_pfun;
+	variant_t	_init;
+public:
+	FoldFunction(const variant_t& fun, const variant_t& init) : _init(init), _pfun(GetObject(fun)) {}
+	STDMETHODIMP Call(const variant_t& params, variant_t& result) {
+		if(!_pfun)	return E_NS_SYNTAXERROR;
+		variant_t vtmp;
+		SafeArray src(const_cast<variant_t&>(params)), tmp(vtmp);
+		result = _init;
+		for(long i = 0; i<src.Count(); i++) {
+			tmp.Put(0, result);
+			tmp.Put(1, src[i]);
+			Check(_pfun->Call(vtmp, result));
+		}
+		return S_OK;
+	}
+};
+
+class MapFunction : public Object
+{
+	IObjectPtr	_pfun;
+public:
+	MapFunction(const variant_t& fun) : _pfun(GetObject(fun)) {}
+	STDMETHODIMP Call(const variant_t& params, variant_t& result) {
+		if(!_pfun)	return E_NS_SYNTAXERROR;
+		SafeArray src(const_cast<variant_t&>(params)), dst(result);
+		dst.Redim(src.Count());
+		for(long i = 0; i<src.Count(); i++) {
+			variant_t tmp;
+			Check(_pfun->Call(src[i], tmp));
+			dst.Put(i, tmp);
+		}
+		return S_OK;
+	}
+};
+
+void FnMap(int n, const variant_t v[], variant_t& result)  { result = new MapFunction(v[0]); }
+void FnFold(int n, const variant_t v[], variant_t& result) { result = new FoldFunction(v[0], v[1]); }
+void FnHead(int n, const variant_t v[], variant_t& result) { result = v[0]; }
+void FnTail(int n, const variant_t v[], variant_t& result) {
+	if(n < 2)	return;
+	SafeArray a(result);
+	a.Redim(n - 1);
+	for(int i = 1; i < n; i++)		a.Put(i-1, v[i]);
+}
+
 // Other
 void FnSize(int n, const variant_t v[], variant_t& result)		{result = (long)n;}
 void FnRgb(int n, const variant_t v[], variant_t& result)		{result = (long)RGB(v[0],v[1],v[2]);}
@@ -359,6 +424,10 @@ Context::vars_t	Context::_globals = {
 	// Array
 	{ TEXT("add"),		new BuiltinFunction(2, FnAdd) },
 	{ TEXT("remove"),	new BuiltinFunction(2, FnRemove) },
+	{ TEXT("fold"),		new BuiltinFunction(2, FnFold) },
+	{ TEXT("fmap"),		new BuiltinFunction(1, FnMap) },
+	{ TEXT("head"),		new BuiltinFunction(-1, FnHead) },
+	{ TEXT("tail"),		new BuiltinFunction(-1, FnTail) },
 	// Other
 	{ TEXT("size"),		new BuiltinFunction(-1, FnSize) },
 	{ TEXT("rgb"),		new BuiltinFunction(3,  FnRgb) },
@@ -400,7 +469,7 @@ bool Context::Get(const tstring& name, variant_t& result) const
 NScript::OpInfo NScript::_operators[Term][10] = {
 	{{Parser::stmt,		&OpNull},	{Parser::end, NULL}},
 	{{Parser::comma,	&OpNull},	{Parser::end, NULL}},
-	{{Parser::assign,	&OpAssign},	{Parser::plusset, &OpXSet<OpAdd>}, {Parser::minusset, &OpXSet<OpSub>}, {Parser::mulset, &OpXSet<OpMul>}, {Parser::divset, &OpXSet<OpDiv>}, {Parser::idivset, &OpXSet<OpIDiv>}, {Parser::end, NULL}},
+	{{Parser::assign,	&OpAssign},	{Parser::plusset, &OpXSet<OpAdd>}, {Parser::minusset, &OpXSet<OpSub>}, {Parser::mulset, &OpXSet<OpMul>}, {Parser::divset, &OpXSet<OpDiv>}, {Parser::idivset, &OpXSet<OpIDiv>}, { Parser::colon, &OpJoin }, {Parser::end, NULL}},
 	{{Parser::ifop,		&OpNull},	{Parser::end, NULL}},
 	{{Parser::land,		&OpLAnd},	{Parser::lor,	&OpLOr},	{Parser::end, NULL}},
 	{{Parser::and,		&OpAnd},	{Parser::or,	&OpOr},		{Parser::end, NULL}},
@@ -432,12 +501,12 @@ HRESULT NScript::Exec(const tchar* script, variant_t& result)
 }
 
 // Parse "if <cond> <true-part> [else <part>]" statement
-void NScript::ParseIf(variant_t& result, bool skip)	{
+void NScript::ParseIf(Precedence level, variant_t& result, bool skip)	{
 	bool cond = skip || (bool)result;
-	Parse(Assignment, result, !cond || skip);
-	if(_parser.GetToken() == Parser::ifelse)	{
+	Parse(level, result, !cond || skip);
+	if(_parser.GetToken() == Parser::ifelse || _parser.GetToken() == Parser::colon)	{
 		_parser.Next();
-		Parse(Assignment, result, cond || skip);
+		Parse(level, result, cond || skip);
 	}
 }
 
@@ -543,14 +612,14 @@ void NScript::Parse(Precedence level, variant_t& result, bool skip)
 				if(_parser.Next() != Parser::name)	Check(E_NS_SYNTAXERROR, NULL, &_parser);
 				local = true;
 			case Parser::name:		ParseVar(result, local, skip);	break;
-			case Parser::iffunc:	_parser.Next();Parse(Assignment, result, skip);ParseIf(result, skip);break;
+			case Parser::iffunc:	_parser.Next();Parse(Assignment, result, skip);ParseIf(Assignment, result, skip);break;
 			case Parser::forloop:	ParseForLoop(result, skip);break;
 			case Parser::func:		ParseFunc(result, skip);break;
 			case Parser::object:	ParseObj(result, skip);break;
 			case Parser::lpar:
 			case Parser::lsquare:
 				_parser.Next();
-				result.Clear();
+				if(!skip)	result.Clear();
 				Parse(Statement, result, skip);
 				_parser.CheckPairedToken(token);
 				break;
@@ -592,7 +661,7 @@ again:
 			if(token == _parser.GetToken())	{
 				if(token != Parser::lpar && token != Parser::lsquare && token != Parser::dot)	_parser.Next();
 				if(token == Parser::ifop)	{		// ternary "a?b:c" operator
-					ParseIf(result, skip);
+					ParseIf(Logical, result, skip);
 					goto again;
 				}
 
@@ -655,7 +724,7 @@ Parser::Token Parser::Next()
 		case '.':	_token = dot;ReadName(Read());_value = _name.c_str();break;
 		case '<':	_token = Peek() == '=' ? Read(), le   : lt;break;
 		case '>':	_token = Peek() == '=' ? Read(), ge   : gt;break;
-		case '=':	_token = Peek() == '=' ? Read(), equ  : assign;break;
+		case '=':	_token = Peek() == '=' ? Read(), equ  : Peek() == '>' ? Read(), func : assign;break;
 		case '!':	_token = Peek() == '=' ? Read(), nequ : lnot;break;
 		case '&':	_token = Peek() == '&' ? Read(), land : and;break;
 		case '|':	_token = Peek() == '|' ? Read(), lor  : or;break;
@@ -669,7 +738,7 @@ Parser::Token Parser::Next()
 		case '\"': 
 		case '\'':	_token = value;ReadString(c);break;
 		case '?':	_token = ifop;break;
-		case ':':	_token = Peek() == '=' ? Read(), setvar : ifelse;break;
+		case ':':	_token = Peek() == '=' ? Read(), setvar : colon;break;
 		default:
 			if(isdigit(c))	{
 				ReadNumber(c);
