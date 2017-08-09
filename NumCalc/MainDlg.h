@@ -151,6 +151,15 @@ public:
 		return TRUE;
 	}
 
+	std::pair<DWORD, CString> GetErrorPos(CString msg, DWORD pos)
+	{
+		DWORD last_break = 0;
+		for(unsigned i = 0; i < min(pos, (unsigned)msg.GetLength()); i++) {
+			if(msg[i] == '\n' || msg[i] == '\r')	last_break = i + 1;
+		}
+		return { pos - last_break, msg.Mid(last_break) };
+	}
+
 	LRESULT OnOK(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 	{
 		if(DoDataExchange(TRUE))	{
@@ -167,8 +176,9 @@ public:
 				_com_error e(hr, pei, true);
 				if(e.HelpContext())		{
 					_result.Format(TEXT("%s at pos %d:"), (LPCTSTR)e.Description(), e.HelpContext());
-					_result2 = (LPCTSTR)e.HelpFile();
-					_result3 = CString(' ', e.HelpContext()-1) + '^';
+					auto err_pos = GetErrorPos((LPCTSTR)e.HelpFile(), e.HelpContext());
+					_result2 = (LPCTSTR)err_pos.second;
+					_result3 = CString(' ', err_pos.first-1) + '^';
 				}	else	{
 					_result = (LPCTSTR)e.Description();
 				}

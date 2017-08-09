@@ -157,7 +157,7 @@ namespace UnitTest
 			Assert::AreEqual("[1; 1; 2; 3; 3; 4; 5]", eval(R"(
 				greater = fn(x) filter(fn(y) y > x);
 				lesse   = fn(x) filter(fn(y) y <= x);
-				qsort   = fn @ == [] ? [] : [tail(@) | lesse(head(@)) | qsort : head(@) : tail(@) | greater(head(@)) | qsort];
+				qsort   = fn @ == [] ? [] : [@` | lesse(`@) | qsort : `@ : @` | greater(`@) | qsort];
 				[2,1,5,4,3,1,3] | qsort
 			)").c_str());
 

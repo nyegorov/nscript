@@ -60,10 +60,10 @@ void Check(HRESULT hr, const void* param = TEXT(""), Parser* parser = NULL)	{
 
 // process list of argument
 HRESULT ProcessArgsList(const Parser::ArgList& args, const variant_t& params, NScript& script)	{
-	SafeArray a(const_cast<variant_t&>(params));
 	if(args.size() == 0)	{
 		script.AddObject(TEXT("@"),params);
 	}	else	{
+		SafeArray a(const_cast<variant_t&>(params));
 		if(args.size() != a.Count())	return DISP_E_BADPARAMCOUNT;
 		const variant_t *pargs = a.GetData();
 		for(int i = a.Count()-1; i>=0; i--)	script.AddObject(args[i].c_str(),pargs[i]);
@@ -127,7 +127,22 @@ void SafeArray::Get(long index, variant_t& value) const	{
 	else			Check(DISP_E_BADINDEX);
 };
 
-void SafeArray::Merge(const variant_t& value)
+void SafeArray::Remove(long index)
+{
+	if(index < 0 || index >= Count())	Check(DISP_E_BADINDEX);
+	if(!IsArray())	_sa = variant_t();
+	else if(Count() == 2) { 
+		index = 1 - index; 	
+		variant_t tmp;
+		Check(SafeArrayGetElement(V_ARRAY(&_sa), &index, &tmp));
+		_sa = tmp;
+	}	else {
+		for(long i = index + 1; i < Count(); i++)	Put(i - 1, (*this)[i]);
+		Redim(Count() - 1);
+	}
+}
+
+void SafeArray::Append(const variant_t& value)
 {
 	SafeArray right(const_cast<variant_t&>(value));
 	for(long i = 0; i < right.Count(); i++)	Add(right[i]);
@@ -228,7 +243,7 @@ void OpIndex(variant_t& op1, variant_t& op2, variant_t& result)	{
 	if(pobj)	Check(pobj->Index(*op2, result));	else	SafeArray(op1).Get(*op2, result);
 	//if(pobj == NULL || FAILED(pobj->Index(*op2, result)))	SafeArray(op1).Get(*op2, result);
 }
-void OpJoin(variant_t& op1, variant_t& op2, variant_t& result)	{ SafeArray a(result = *op1); a.Merge(*op2); }
+void OpJoin(variant_t& op1, variant_t& op2, variant_t& result)	{ SafeArray a(result = *op1); a.Append(*op2); }
 void OpCall(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op1)->Call(*op2, result));}
 void OpAssign(variant_t& op1, variant_t& op2, variant_t& result){Check(IObjectPtr(op1)->Set(*op2));result = op1;}
 void OpItem(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op1)->Item(*op2, result));}
@@ -245,6 +260,8 @@ void OpPPX(variant_t& op1, variant_t& op2, variant_t& result)	{OpXSet<OpAdd>(op2
 void OpMMX(variant_t& op1, variant_t& op2, variant_t& result)	{OpXSet<OpSub>(op2,variant_t(1L),result);}
 void OpXPP(variant_t& op1, variant_t& op2, variant_t& result)	{variant_t v;result = op1;*result;OpXSet<OpAdd>(op1,variant_t(1L),v);}
 void OpXMM(variant_t& op1, variant_t& op2, variant_t& result)	{variant_t v;result = op1;*result;OpXSet<OpSub>(op1,variant_t(1L),v);}
+void OpHead(variant_t& op1, variant_t& op2, variant_t& result) { SafeArray a(*op2); a.Get(0, result); }
+void OpTail(variant_t& op1, variant_t& op2, variant_t& result) { SafeArray a(result = *op1); a.Remove(0); }
 
 // Functions
 
@@ -496,8 +513,8 @@ NScript::OpInfo NScript::_operators[Term][10] = {
 	{{Parser::plus,		&OpAdd},	{Parser::minus,	&OpSub},	{Parser::end, NULL}},
 	{{Parser::multiply,	&OpMul},	{Parser::divide,&OpDiv},	{Parser::idiv, &OpIDiv},{Parser::mod, &OpMod},	{Parser::end, NULL}},
 	{{Parser::pwr,		&OpPow},	{Parser::end, NULL}},
-	{{Parser::unaryplus,&OpPPX},	{Parser::unaryminus,&OpMMX},{Parser::newobj,&OpNew},{Parser::not,	&OpNot},{Parser::lnot, &OpLNot},{Parser::minus, &OpNeg},	{Parser::end, NULL}},
-	{{Parser::unaryplus,&OpXPP},	{Parser::unaryminus,&OpXMM},{Parser::lpar, &OpCall},{Parser::dot, &OpItem}, {Parser::lsquare, &OpIndex},{Parser::end, NULL}},
+	{{Parser::unaryplus,&OpPPX},	{Parser::unaryminus,&OpMMX},{Parser::newobj,&OpNew},{Parser::not,	&OpNot},{Parser::lnot, &OpLNot},{Parser::minus, &OpNeg},{ Parser::apo, &OpHead }, {Parser::end, NULL}},
+	{{Parser::unaryplus,&OpXPP},	{Parser::unaryminus,&OpXMM},{Parser::lpar, &OpCall},{Parser::dot, &OpItem}, {Parser::lsquare, &OpIndex},{ Parser::apo, &OpTail},{Parser::end, NULL}},
 };
 
 HRESULT NScript::Exec(const tchar* script, variant_t& result)
@@ -689,7 +706,7 @@ again:
 				// parse right-hand operand
 				if(token == Parser::dot)	{right = _parser.GetValue(); _parser.Next();}		// special case for '.' operator
 				else if(level == Assignment || level == Unary)	Parse(level, right, skip);		// right-associative operators
-				else if(token != Parser::unaryplus && token != Parser::unaryminus && !(level == Script && _parser.GetToken() == Parser::rcurly))	
+				else if(token != Parser::unaryplus && token != Parser::unaryminus  && token != Parser::apo && !(level == Script && _parser.GetToken() == Parser::rcurly))
 					Parse((Precedence)(level+1), level == Script ? result : right, skip);		// left-associative operators
 
 				// perform operator's action
@@ -754,7 +771,8 @@ Parser::Token Parser::Next()
 		case '[':	_token = lsquare;break;
 		case ']':	_token = rsquare;break;
 		case '#':	_token = value;ReadString(c);_value.ChangeType(VT_DATE);break;
-		case '\"': 
+		case '`':	_token = apo; break;
+		case '\"':
 		case '\'':	_token = value;ReadString(c);break;
 		case '?':	_token = ifop;break;
 		case ':':	_token = Peek() == '=' ? Read(), setvar : colon;break;

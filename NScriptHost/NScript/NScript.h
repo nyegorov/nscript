@@ -72,7 +72,7 @@ class Parser	{
 public:
 	typedef std::vector<tstring>	ArgList;
 	typedef size_t	State;
-	enum Token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon};
+	enum Token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon,apo};
 
 	Parser();
 	void Init(const tchar* expr){if(expr)	_content = expr;SetState(0);}
@@ -170,8 +170,9 @@ public:
 	void Put(long index, const variant_t& value, bool forceArray = false);
 	void Add(const variant_t& value)				{Put(Count(), value);}
 	void Redim(long size);
-	void Merge(const variant_t& value);
+	void Append(const variant_t& value);
 	void Get(long index, variant_t& value) const;
+	void Remove(long index);
 	long Count() const;
 	variant_t* GetData();
 	variant_t& operator [](long index);
