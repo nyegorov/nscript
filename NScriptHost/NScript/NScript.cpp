@@ -310,15 +310,7 @@ void FnHex(int n, const variant_t v[], variant_t& result)		{
 }
 // Array
 void FnAdd(int n, const variant_t v[], variant_t& result)		{SafeArray(result=v[0]).Add(v[1]);}
-void FnRemove(int n, const variant_t v[], variant_t& result)	{
-	variant_t vt;
-	SafeArray a(result=v[0]);
-	for(long i=v[1];i<a.Count()-1;i++)	{
-		a.Get(i+1,vt);
-		a.Put(i, vt);
-	}
-	a.Redim(a.Count()-1);
-}
+void FnRemove(int n, const variant_t v[], variant_t& result)	{SafeArray(result = v[0]).Remove((long)v[1]);}
 
 class FoldFunction : public Object
 {
