@@ -306,15 +306,14 @@ void FnRemove(int n, const variant_t v[], variant_t& result)	{
 class FoldFunction : public Object
 {
 	IObjectPtr	_pfun;
-	variant_t	_init;
 public:
-	FoldFunction(const variant_t& fun, const variant_t& init) : _init(init), _pfun(GetObject(fun)) {}
+	FoldFunction(const variant_t& fun) : _pfun(GetObject(fun)) {}
 	STDMETHODIMP Call(const variant_t& params, variant_t& result) {
 		if(!_pfun)	return E_NS_SYNTAXERROR;
 		variant_t vtmp;
 		SafeArray src(const_cast<variant_t&>(params)), tmp(vtmp);
-		result = _init;
-		for(long i = 0; i<src.Count(); i++) {
+		result = src[0];
+		for(long i = 1; i<src.Count(); i++) {
 			tmp.Put(0, result);
 			tmp.Put(1, src[i]);
 			Check(_pfun->Call(vtmp, result));
@@ -341,8 +340,26 @@ public:
 	}
 };
 
+class FilterFunction : public Object
+{
+	IObjectPtr	_pfun;
+public:
+	FilterFunction(const variant_t& fun) : _pfun(GetObject(fun)) {}
+	STDMETHODIMP Call(const variant_t& params, variant_t& result) {
+		if(!_pfun)	return E_NS_SYNTAXERROR;
+		SafeArray src(const_cast<variant_t&>(params)), dst(result);
+		for(long i = 0; i<src.Count(); i++) {
+			variant_t tmp;
+			Check(_pfun->Call(src[i], tmp));
+			if((bool)*tmp)	dst.Add(src[i]);
+		}
+		return S_OK;
+	}
+};
+
 void FnMap(int n, const variant_t v[], variant_t& result)  { result = new MapFunction(v[0]); }
-void FnFold(int n, const variant_t v[], variant_t& result) { result = new FoldFunction(v[0], v[1]); }
+void FnFold(int n, const variant_t v[], variant_t& result) { result = new FoldFunction(v[0]); }
+void FnFilter(int n, const variant_t v[], variant_t& result) { result = new FilterFunction(v[0]); }
 void FnHead(int n, const variant_t v[], variant_t& result) { result = v[0]; }
 void FnTail(int n, const variant_t v[], variant_t& result) {
 	if(n < 2)	return;
@@ -424,8 +441,9 @@ Context::vars_t	Context::_globals = {
 	// Array
 	{ TEXT("add"),		new BuiltinFunction(2, FnAdd) },
 	{ TEXT("remove"),	new BuiltinFunction(2, FnRemove) },
-	{ TEXT("fold"),		new BuiltinFunction(2, FnFold) },
+	{ TEXT("fold"),		new BuiltinFunction(1, FnFold) },
 	{ TEXT("fmap"),		new BuiltinFunction(1, FnMap) },
+	{ TEXT("filter"),	new BuiltinFunction(1, FnFilter) },
 	{ TEXT("head"),		new BuiltinFunction(-1, FnHead) },
 	{ TEXT("tail"),		new BuiltinFunction(-1, FnTail) },
 	// Other
@@ -694,6 +712,7 @@ Parser::Keywords Parser::_keywords = {
 	{ TEXT("if"),		Parser::iffunc },
 	{ TEXT("else"),		Parser::ifelse },
 	{ TEXT("sub"),		Parser::func },
+	{ TEXT("fn"),		Parser::func },
 	{ TEXT("object"),	Parser::object },
 	{ TEXT("new"),		Parser::newobj },
 	{ TEXT("my"),		Parser::my },

@@ -139,14 +139,26 @@ namespace UnitTest
 		}
 		TEST_METHOD(Functional)
 		{
-			Assert::AreEqual("15", eval("sum = fold(sub(x,y) x+y, 0); sum([4,5,6])").c_str());
-			Assert::AreEqual("36", eval("fold(sub(x,y) x*y, 1)(fmap(sub @^2)([1,2,3]))").c_str());
-			Assert::AreEqual("50", eval("square = sub(x) x^2; plus = sub(x,y) x+y; [3, 4, 5] | fmap(square) | fold(plus, 0)").c_str());
-			Assert::AreEqual("brothers,in,metal", eval("join = sub(s) sub() tail(@) | fold(sub(x, y) x + s + y, head(@)); ['brothers', 'in', 'metal'] | join(',')").c_str());
-			Assert::AreEqual("BROTHERS=IN=ARMS", eval(R"(
-				join  = sub(c)    sub tail(@) | fold(sub(x, y) x + c + y, head(@));
-				split = sub(s, c) (n = instr(s, c)) < 0 ? s : [left(s, n):split(mid(s, n + 1, len(s) - n), c)];
-				split('brothers in arms', ' ') | fmap(upper) | join('=')
+			Assert::AreEqual("15", eval("sum = fold(fn(x,y) x+y); sum([4,5,6])").c_str());
+			Assert::AreEqual("36", eval("fold(fn(x,y) x*y)(fmap(fn @^2)([1,2,3]))").c_str());
+			Assert::AreEqual("35", eval(R"(
+				odds   = fn @%2==1; 
+				square = fn @^2; 
+				plus   = fn(x,y) x+y; 
+				[1,2,3,4,5] | filter(odds) | fmap(square) | fold(plus)
+			)").c_str());
+			Assert::AreEqual("brothers,in,metal", eval("['brothers', 'in', 'metal'] | fold(fn(x,y) x+','+y)").c_str());
+			Assert::AreEqual("DRAGONS=KEEPERS", eval(R"(
+				join  = fn(c)    fold(fn(x, y) x+c+y);
+				split = fn(s, c) (n = instr(s, c)) < 0 ? s : [left(s, n):split(mid(s, n + 1, len(s) - n), c)];
+				split('holy dragons keepers of time', ' ') | filter(fn len(@)>4) | fmap(upper) | join('=')
+			)").c_str());
+
+			Assert::AreEqual("[1; 1; 2; 3; 3; 4; 5]", eval(R"(
+				greater = fn(x) filter(fn(y) y > x);
+				lesse   = fn(x) filter(fn(y) y <= x);
+				qsort   = fn @ == [] ? [] : [tail(@) | lesse(head(@)) | qsort : head(@) : tail(@) | greater(head(@)) | qsort];
+				[2,1,5,4,3,1,3] | qsort
 			)").c_str());
 
 		}
