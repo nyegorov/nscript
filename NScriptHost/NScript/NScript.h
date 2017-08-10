@@ -49,6 +49,7 @@ struct __declspec(uuid("{AD60A84C-990F-4341-9477-F8830C8D3415}")) IValue : publi
 _COM_SMARTPTR_TYPEDEF(IValue, IID_IValue);
 
 struct lessi	{bool operator () (const tstring& s1, const tstring &s2) const {return lstrcmpi(s1.c_str(), s2.c_str()) < 0;}};
+using args_list = std::vector<tstring>;
 
 // Container for storing named objects and variables
 class Context	
@@ -70,7 +71,6 @@ private:
 // Parser of input stream to a list of tokens
 class Parser	{
 public:
-	typedef std::vector<tstring>	ArgList;
 	typedef size_t	State;
 	enum Token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon,apo};
 
@@ -79,7 +79,6 @@ public:
 	Token GetToken()			{return _token;}
 	const variant_t& GetValue()	{return _value;}
 	const tstring& GetName()	{return _name;}
-	const ArgList& GetArgs()	{return _args;}
 	State GetState()			{return _lastpos;}
 	void SetState(State state)	{_pos = state;_token=end;Next();}
 	tstring GetContent(State begin, State end)	{return _content.substr(begin, end-begin);}
@@ -89,22 +88,18 @@ private:
 	typedef std::map<tstring, Token, lessi> Keywords;
 	static Keywords	_keywords;
 	tchar			_decpt = std::use_facet<std::numpunct<tchar>>(std::locale()).decimal_point();
-
 	Token			_token;
 	tstring			_content;
 	State			_pos = 0;
 	State			_lastpos = 0;
 	variant_t		_value;
 	tstring			_name;
-	ArgList			_args;
-	tstring			_temp;
 
 	tchar Peek()			{return _pos >= _content.length() ? 0 : _content[_pos];}
 	tchar Read()			{tchar c = Peek();_pos++;return c;}
 	void Back()				{_pos--;}
 	void ReadString(tchar quote);
 	void ReadNumber(tchar c);
-	void ReadArgList();
 	void ReadName(tchar c);
 };
 
@@ -118,13 +113,16 @@ public:
 	HRESULT AddObject(const tchar* name, const variant_t& object)	{return _context.Set(name, object), S_OK;}
 
 protected:
-	friend class Class;
+	friend class Class; 
+	friend class Function;
 	enum Precedence	{Script = 0,Statement,Assignment,Conditional,Logical,Binary,Equality,Relation,Addition,Multiplication,Power,Unary,Functional,Primary,Term};
+
 	void Parse(Precedence level, variant_t& result, bool skip);
 	void Parse(Precedence level, Parser::State state, variant_t& result);
 	void ParseIf(Precedence level, variant_t& result, bool skip);
 	void ParseForLoop(variant_t& result, bool skip);
-	void ParseFunc(variant_t& result, bool skip);
+	void ParseArgList(args_list& args, bool forceArgs);
+	void ParseFunc(variant_t& args, bool skip);
 	void ParseObj(variant_t& result, bool skip);
 	void ParseVar(variant_t& result, bool local, bool skip);
 
@@ -223,12 +221,11 @@ protected:
 // User-defined functions
 class Function	: public Object {
 public:
-	typedef Parser::ArgList	ArgList;
-	Function(const ArgList& args, const tchar* body, const Context *pcontext = NULL) : _args(args), _body(body), _context(pcontext)	{}
+	Function(const args_list& args, const tchar* body, const Context *pcontext = NULL) : _args(args), _body(body), _context(pcontext)	{}
 	STDMETHODIMP Call(const variant_t& params, variant_t& result);
 protected:
 	~Function()			{}
-	const ArgList		_args;
+	const args_list		_args;
 	const tstring		_body;
 	const Context		_context;
 };
@@ -236,15 +233,14 @@ protected:
 // User-defined classes
 class Class	: public Object {
 public:
-	typedef Parser::ArgList	ArgList;
-	Class(const ArgList& args, const tchar* body, const Context *pcontext = NULL) : _args(args), _body(body), _context(pcontext)	{}
+	Class(const args_list& args, const tchar* body, const Context *pcontext = NULL) : _args(args), _body(body), _context(pcontext)	{}
 	STDMETHODIMP New(variant_t& result);
 	STDMETHODIMP Call(const variant_t& params, variant_t& result)	{_params = params; result = this; return S_OK;}
 
 	class Instance	: public Object {
 	public:
 		Instance(const tchar* body, const Context *pcontext) : _script(body, pcontext)	{}
-		STDMETHODIMP Init(const ArgList& args, const variant_t& params);
+		STDMETHODIMP Init(const args_list& args, const variant_t& params);
 		STDMETHODIMP Item(const variant_t& item, variant_t& result);
 	protected:
 		~Instance()			{}
@@ -256,7 +252,7 @@ protected:
 	const tstring		_body;
 	variant_t			_params;
 	const Context		_context;
-	const ArgList		_args;
+	const args_list		_args;
 };
 
 // Built-in functions

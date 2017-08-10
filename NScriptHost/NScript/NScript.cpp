@@ -59,7 +59,7 @@ void Check(HRESULT hr, const void* param = TEXT(""), Parser* parser = NULL)	{
 }
 
 // process list of argument
-HRESULT ProcessArgsList(const Parser::ArgList& args, const variant_t& params, NScript& script)	{
+HRESULT ProcessArgsList(const args_list& args, const variant_t& params, NScript& script)	{
 	if(args.size() == 0)	{
 		script.AddObject(TEXT("@"),params);
 	}	else	{
@@ -190,7 +190,7 @@ STDMETHODIMP Class::New(variant_t& result)	{
 	return pinst->Init(_args, _params);
 }
 
-STDMETHODIMP Class::Instance::Init(const ArgList& args, const variant_t& params)	{
+STDMETHODIMP Class::Instance::Init(const args_list& args, const variant_t& params)	{
 	HRESULT hr = ProcessArgsList(args, params, _script);
 	return FAILED(hr) ? hr : (_script.Parse(NScript::Script, variant_t(), false), S_OK);
 }
@@ -574,11 +574,27 @@ void NScript::ParseForLoop(variant_t& result, bool skip)	{
 	}
 }
 
+// Parse comma-separated arguments list
+void NScript::ParseArgList(args_list& args, bool forceArgs) {
+	auto token = _parser.Next();
+	if(token != Parser::lpar && !forceArgs) return;		// function without parameters
+	if(token == Parser::lpar)	_parser.Next();
+
+	while(_parser.GetToken() == Parser::name) {
+		args.push_back(_parser.GetName());
+		if(_parser.Next() != Parser::comma) break;
+		_parser.Next();
+	};
+	if(args.size() == 1 && args.front() == TEXT("@"))	args.clear();
+
+	if(_parser.GetToken() == Parser::rpar)	_parser.Next();
+}
+
 // Parse "sub [(<arguments>)] <body>" statement
 void NScript::ParseFunc(variant_t& result, bool skip)
 {
-	Parser::ArgList args = _parser.GetArgs();
-	_parser.Next();
+	args_list args;
+	ParseArgList(args, _parser.GetToken() == Parser::idiv);
 	Parser::State state = _parser.GetState();
 	if(_parser.GetToken() == Parser::end)	Check(E_NS_SYNTAXERROR, NULL, &_parser);
 	// _varnames contains list of variables to be captured by function
@@ -590,8 +606,8 @@ void NScript::ParseFunc(variant_t& result, bool skip)
 // Parse "object [(<arguments>)] {<body>}" statement
 void NScript::ParseObj(variant_t& result, bool skip)
 {
-	Parser::ArgList args = _parser.GetArgs();
-	_parser.Next();
+	args_list args;
+	ParseArgList(args, false);
 	if(_parser.GetToken() == Parser::lcurly)	_parser.Next();
 	Parser::State state = _parser.GetState();
 	if(_parser.GetToken() == Parser::end)	Check(E_NS_SYNTAXERROR, NULL, &_parser);
@@ -641,6 +657,7 @@ void NScript::Parse(Precedence level, variant_t& result, bool skip)
 			case Parser::name:		ParseVar(result, local, skip);	break;
 			case Parser::iffunc:	_parser.Next();Parse(Assignment, result, skip);ParseIf(Assignment, result, skip);break;
 			case Parser::forloop:	ParseForLoop(result, skip);break;
+			case Parser::idiv:		ParseFunc(result, skip); break;
 			case Parser::func:		ParseFunc(result, skip);break;
 			case Parser::object:	ParseObj(result, skip);break;
 			case Parser::lpar:
@@ -727,10 +744,7 @@ Parser::Keywords Parser::_keywords = {
 	{ TEXT("my"),		Parser::my },
 };
 
-Parser::Parser() {
-	_temp.reserve(32);
-	_name.reserve(32);
-}
+Parser::Parser() {}
 
 Parser::Token Parser::Next()
 {
@@ -773,13 +787,8 @@ Parser::Token Parser::Next()
 				ReadNumber(c);
 			}	else	{
 				ReadName(c);
-				Keywords::const_iterator p = _keywords.find(_name);
-				if(p == _keywords.end())	{
-					_token = name;
-				}	else	{
-					_token = p->second;
-					if(_token == func || _token == object)	ReadArgList();
-				}
+				auto p = _keywords.find(_name);
+				_token = p == _keywords.end() ? name : _token = p->second;
 			}
 			break;
 	}
@@ -832,37 +841,15 @@ void Parser::ReadNumber(tchar c)
 
 // Parse quoted string from input stream
 void Parser::ReadString(tchar quote)	{
-	_temp.clear();
-	for(;;_temp += Read())	{
+	tstring temp;
+	for(;;temp += Read())	{
 		State endpos = _content.find(quote, _pos);
 		if(endpos == tstring::npos)	Check(E_NS_MISSINGCHARACTER, (void *)quote, this);
-		_temp += _content.substr(_pos, endpos-_pos).c_str();
+		temp += _content.substr(_pos, endpos-_pos).c_str();
 		_pos = endpos+1;
 		if(Peek() != quote)	break;
 	}
-	_value = _temp.c_str();
-}
-
-// Parse comma-separated arguments list from input stream
-void Parser::ReadArgList()	{
-	_args.clear();
-	_temp.clear();
-	tchar c;
-	while(isspace(c = Read()));
-	if(c != '(')	{Back(); return;}		// function without parameters
-
-	while(c = Read()) {
-		if(isspace(c))	{
-		}	else if(c == ',')	{
-			_args.push_back(_temp);
-			_temp.clear();
-		}	else if(c == ')')	{
-			if(!_temp.empty()) _args.push_back(_temp);
-			break;
-		}	else if(!isalnum(c) && c!= '_'){
-			Check(E_NS_SYNTAXERROR, NULL, this);
-		}	else	_temp += c;
-	}
+	_value = temp.c_str();
 }
 
 // Parse object name from input stream
