@@ -72,7 +72,7 @@ private:
 class Parser	{
 public:
 	typedef size_t	State;
-	enum Token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon,apo};
+	enum Token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon,apo,mdot};
 
 	Parser();
 	void Init(const tchar* expr){if(expr)	_content = expr;SetState(0);}
@@ -270,6 +270,19 @@ protected:
 	~BuiltinFunction()	{}
 	const int			_count;
 	FN*					_pfunc;
+};
+
+class Composer : public Object {
+public:
+	Composer(const variant_t& left, const variant_t& right) : _left(left), _right(right) {}
+	STDMETHODIMP Call(const variant_t& params, variant_t& result) {
+		variant_t tmp;
+		HRESULT hr = _right->Call(params, tmp);
+		return SUCCEEDED(hr) ? _left->Call(tmp, result) : hr;
+	}
+protected:
+	IObjectPtr		_left;
+	IObjectPtr		_right;
 };
 
 }

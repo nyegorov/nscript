@@ -227,7 +227,7 @@ void OpOr(variant_t& op1, variant_t& op2, variant_t& result)	{
 	Check(hr);
 }
 void OpGT(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)==VARCMP_GT;}
-void OpGE(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)>=VARCMP_GT;}
+void OpGE(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)>=VARCMP_EQ;}
 void OpLT(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)==VARCMP_LT;}
 void OpLE(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)<=VARCMP_EQ;}
 void OpEqu(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)==VARCMP_EQ;}
@@ -246,7 +246,8 @@ void OpIndex(variant_t& op1, variant_t& op2, variant_t& result)	{
 void OpJoin(variant_t& op1, variant_t& op2, variant_t& result)	{ SafeArray a(result = *op1); a.Append(*op2); }
 void OpCall(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op1)->Call(*op2, result));}
 void OpAssign(variant_t& op1, variant_t& op2, variant_t& result){Check(IObjectPtr(op1)->Set(*op2));result = op1;}
-void OpItem(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op1)->Item(*op2, result));}
+void OpItem(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op1)->Item(*op2, result)); }
+void OpDot(variant_t& op1, variant_t& op2, variant_t& result)	{result = new Composer(*op1, *op2); }
 void OpNew(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op2)->New(result));}
 
 template <void OP(variant_t& op1, variant_t& op2, variant_t& result)>
@@ -504,7 +505,7 @@ NScript::OpInfo NScript::_operators[Term][10] = {
 	{{Parser::gt,		&OpGT},		{Parser::ge,	&OpGE},		{Parser::lt, &OpLT},	{Parser::le, &OpLE},	{Parser::end, NULL}},
 	{{Parser::plus,		&OpAdd},	{Parser::minus,	&OpSub},	{Parser::end, NULL}},
 	{{Parser::multiply,	&OpMul},	{Parser::divide,&OpDiv},	{Parser::idiv, &OpIDiv},{Parser::mod, &OpMod},	{Parser::end, NULL}},
-	{{Parser::pwr,		&OpPow},	{Parser::end, NULL}},
+	{{Parser::pwr,		&OpPow},	{Parser::mdot,	&OpDot},	{Parser::end, NULL}},
 	{{Parser::unaryplus,&OpPPX},	{Parser::unaryminus,&OpMMX},{Parser::newobj,&OpNew},{Parser::not,	&OpNot},{Parser::lnot, &OpLNot},{Parser::minus, &OpNeg},{ Parser::apo, &OpHead }, {Parser::end, NULL}},
 	{{Parser::unaryplus,&OpXPP},	{Parser::unaryminus,&OpXMM},{Parser::lpar, &OpCall},{Parser::dot, &OpItem}, {Parser::lsquare, &OpIndex},{ Parser::apo, &OpTail},{Parser::end, NULL}},
 };
@@ -778,6 +779,7 @@ Parser::Token Parser::Next()
 		case ']':	_token = rsquare;break;
 		case '#':	_token = value;ReadString(c);_value.ChangeType(VT_DATE);break;
 		case '`':	_token = apo; break;
+		case 0xB7:	_token = mdot; break;
 		case '\"':
 		case '\'':	_token = value;ReadString(c);break;
 		case '?':	_token = ifop;break;

@@ -160,7 +160,19 @@ namespace UnitTest
 				qsort   = fn @ == [] ? [] : [@` | lesse(`@) | qsort : `@ : @` | greater(`@) | qsort];
 				[2,1,5,4,3,1,3] | qsort
 			)").c_str());
-
+			Assert::AreEqual("[* NSCRIPT *; * LISP *; * COQ *]", eval(R"(
+				big = upper;
+				stars = \s '* ' + s + ' *';
+				pretty = fmap(stars·big);
+				["nscript", "lisp", "coq"] | pretty;
+			)").c_str());
+			Assert::AreEqual("196", eval(R"(
+				divs = fn(x) {
+					divn = fn(x, n)	if n >= x x else x%n ? divn(x, n + 1) : [n:divn(x / n, n)];
+					divn(x, 2)
+				};
+				divs(196) | fold(\x,y x*y)
+			)").c_str());
 		}
 		TEST_METHOD(Classes)
 		{
