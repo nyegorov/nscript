@@ -5,6 +5,8 @@
 
 #pragma once
 
+#define _HAS_CXX17 1
+
 #include "targetver.h"
 
 // Headers for CppUnitTest
@@ -14,5 +16,5 @@
 #include <string>
 #include <comutil.h>
 #include <thread>
-#include <strstream>
+#include <sstream>
 #include <mutex>

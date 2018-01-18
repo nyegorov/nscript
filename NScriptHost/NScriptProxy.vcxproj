@@ -64,6 +64,7 @@
       <ObjectFileName>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(SolutionDir)Build\$(Configuration)\pdb\$(ProjectName).pdb</ProgramDataBaseFileName>
       <PrecompiledHeaderOutputFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>rpcrt4.lib;libcmtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -88,6 +89,7 @@
       <ObjectFileName>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(SolutionDir)Build\$(Configuration)\pdb\$(ProjectName).pdb</ProgramDataBaseFileName>
       <PrecompiledHeaderOutputFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>rpcrt4.lib;libcmt.lib;%(AdditionalDependencies)</AdditionalDependencies>

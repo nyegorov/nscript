@@ -340,13 +340,13 @@ namespace UnitTest
 			auto thread_func = [&mut](string &res, LPSTREAM pstream, string name, DWORD ctx) {
 				CoInitializeEx(NULL, ctx);
 				INScriptPtr ns;
-				ostrstream os;
+				ostringstream os;
 				CoGetInterfaceAndReleaseStream(pstream, IID_INScript, (PVOID*)&ns);
 				{	
 					lock_guard<mutex> lock(mut);
 					os << name << ": " << GetCurrentThreadId() << " -> " << bstr_t(ns->Exec(apt_test));
 				}
-				res.assign(os.str(), (unsigned)os.pcount());
+				res.assign(os.str(), (unsigned)os.str().size());
 				ns = NULL;
 				CoUninitialize();
 			};
@@ -356,10 +356,10 @@ namespace UnitTest
 			std::thread mta1(thread_func, ref(res[1]), pstreams[1], "MTA1", COINIT_MULTITHREADED);
 			std::thread mta2(thread_func, ref(res[2]), pstreams[2], "MTA2", COINIT_MULTITHREADED);
 			{
-				ostrstream os;
+				ostringstream os;
 				lock_guard<mutex> lock(mut);
 				os << "MAIN STA: " << GetCurrentThreadId() << " -> " << bstr_t(ns->Exec(apt_test));
-				res[3].assign(os.str(), (unsigned)os.pcount());
+				res[3].assign(os.str(), (unsigned)os.str().size());
 			}
 
 			DWORD dwIndex;

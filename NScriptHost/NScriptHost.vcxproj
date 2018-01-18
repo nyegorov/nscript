@@ -22,7 +22,7 @@
     <ProjectGuid>{F90C4C74-DEE4-4880-9DD0-4F3413B16B32}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>NScriptHost</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -114,6 +114,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;NSCRIPTHOST_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderOutputFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -157,6 +158,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;NSCRIPTHOST_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderOutputFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -172,6 +174,7 @@
     <ClInclude Include="ComLite\ComLite.h" />
     <ClInclude Include="ComLite\Dispatch.h" />
     <ClInclude Include="ComLite\RegKey.h" />
+    <ClInclude Include="NScript3\NScript3.h" />
     <ClInclude Include="NScript\NDispatch.h" />
     <ClInclude Include="NScript\NHash.h" />
     <ClInclude Include="NScript\NScript.h" />
@@ -180,6 +183,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ComLite\ClassFactory.cpp" />
+    <ClCompile Include="NScript3\NScript3.cpp" />
     <ClCompile Include="NScriptHost.cpp" />
     <ClCompile Include="NScript\NDispatch.cpp" />
     <ClCompile Include="NScript\NScript.cpp" />

@@ -108,7 +108,7 @@
       <ManifestFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest</ManifestFile>
       <ProgramDatabaseFile>$(SolutionDir)Build\$(Configuration)\pdb\$(ProjectName).pdb</ProgramDatabaseFile>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
-      <AdditionalDependencies>ndispatch.obj;nscript.obj;stdafx.obj;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ndispatch.obj;nscript.obj;nscript3.obj;stdafx.obj;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <FullProgramDatabaseFile>true</FullProgramDatabaseFile>
     </Link>
     <BuildLog>
@@ -124,6 +124,7 @@
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <UseFullPaths>true</UseFullPaths>
       <PrecompiledHeaderOutputFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -155,7 +156,7 @@
       <AdditionalLibraryDirectories>$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories);$(SolutionDir)Build\$(Configuration)\obj\NScriptHost</AdditionalLibraryDirectories>
       <ManifestFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest</ManifestFile>
       <ProgramDatabaseFile>$(SolutionDir)Build\$(Configuration)\pdb\$(ProjectName).pdb</ProgramDatabaseFile>
-      <AdditionalDependencies>ndispatch.obj;nscript.obj;stdafx.obj;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ndispatch.obj;nscript.obj;nscript3.obj;stdafx.obj;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <FullProgramDatabaseFile>true</FullProgramDatabaseFile>
     </Link>
@@ -199,6 +200,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="test_nscript.cpp" />
+    <ClCompile Include="test_nscript3.cpp" />
     <ClCompile Include="VbScript.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

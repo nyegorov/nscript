@@ -15,6 +15,9 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
+    <Filter Include="NScript3">
+      <UniqueIdentifier>{ba816423-4115-4254-8cff-18131f995153}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -44,6 +47,9 @@
     <ClInclude Include="ComLite\RegKey.h">
       <Filter>ComLite</Filter>
     </ClInclude>
+    <ClInclude Include="NScript3\NScript3.h">
+      <Filter>NScript3</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -60,6 +66,9 @@
     </ClCompile>
     <ClCompile Include="ComLite\ClassFactory.cpp">
       <Filter>ComLite</Filter>
+    </ClCompile>
+    <ClCompile Include="NScript3\NScript3.cpp">
+      <Filter>NScript3</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
