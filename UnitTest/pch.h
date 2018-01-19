@@ -5,8 +5,6 @@
 
 #pragma once
 
-#define _HAS_CXX17 1
-
 #include "targetver.h"
 
 // Headers for CppUnitTest

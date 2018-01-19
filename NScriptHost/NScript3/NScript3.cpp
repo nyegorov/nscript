@@ -3,6 +3,7 @@
 #include <limits>
 #include <algorithm>
 #include <functional>
+#include <tuple>
 #include <math.h>
 #include <time.h>
 #include <assert.h>
@@ -220,43 +221,61 @@ STDMETHODIMP Function::Call(const variant_t& params, variant_t& result)	{
 
 inline bool is_numeric(value_t v) { return v.index() < 2; }
 
-struct sum {
+enum class associativity { left, right };
+
+struct op_base {
+	const parser::token token = parser::token::end;
+	const associativity assoc = associativity::left;
+	template<class X, class Y> value_t operator()(X&& x, Y&& y) { throw nscript_error::syntax_error; return { 0 }; }
+};
+
+struct op_null : op_base { };
+
+struct op_add : op_base {
+	const parser::token token = parser::token::plus;
+	using op_base::operator();
 	value_t operator()(int x, int y) { return { x + y }; }
 	value_t operator()(int x, double y) { return { x + y }; }
 	value_t operator()(double x, int y) { return { x + y }; }
 	value_t operator()(double x, double y) { return { x + y }; }
-	template<class X, class Y> value_t operator()(X&& x, Y&& y) { throw nscript_error::syntax_error; return { 0 }; }
 };
-value_t op_add(value_t op1, value_t op2)	{
-	return std::visit(sum(), op1, op2);
-}
-struct sub {
+
+struct op_sub : op_base {
+	const parser::token token = parser::token::minus;
+	using op_base::operator();
 	value_t operator()(int x, int y) { return { x - y }; }
 	value_t operator()(int x, double y) { return { x - y }; }
-	template<class X, class Y> value_t operator()(X&& x, Y&& y) { throw nscript_error::syntax_error; return { 0 }; }
+	value_t operator()(double x, int y) { return { x - y }; }
+	value_t operator()(double x, double y) { return { x - y }; }
 };
-value_t op_sub(value_t op1, value_t op2) {
-	return std::visit(sub(), op1, op2);
-}
-value_t op_mul(value_t op1, value_t op2)	{ throw std::errc::not_supported; }
-value_t op_div(value_t op1, value_t op2)	{ throw std::errc::not_supported;}
-value_t op_idiv(value_t op1, value_t op2)	{ throw std::errc::not_supported;}
-value_t op_mod(value_t op1, value_t op2)	{ throw std::errc::not_supported;}
-value_t op_pow(value_t op1, value_t op2)	{ throw std::errc::not_supported;}
-value_t op_dot(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_ppx(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_mmx(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_xpp(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_xmm(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_not(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_lnot(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_neg(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_head(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_tail(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_item(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_index(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_call(value_t op1, value_t op2) { throw std::errc::not_supported; }
-value_t op_new(value_t op1, value_t op2) { throw std::errc::not_supported; }
+
+struct op_mul : op_base {
+	const parser::token token = parser::token::multiply;
+	using op_base::operator();
+	value_t operator()(int x, int y) { return { x * y }; }
+	value_t operator()(int x, double y) { return { x * y }; }
+	value_t operator()(double x, int y) { return { x * y }; }
+	value_t operator()(double x, double y) { return { x * y }; }
+};
+
+struct op_div : op_base {
+	const parser::token token = parser::token::divide;
+	using op_base::operator();
+	value_t operator()(int x, int y) { return { x / y }; }
+	value_t operator()(int x, double y) { return { x / y }; }
+	value_t operator()(double x, int y) { return { x / y }; }
+	value_t operator()(double x, double y) { return { x / y }; }
+};
+
+struct op_pow : op_base {
+	const parser::token token = parser::token::pwr;
+	using op_base::operator();
+	value_t operator()(int x, int y) { return { pow(x, y) }; }
+	value_t operator()(int x, double y) { return { pow(x, y) }; }
+	value_t operator()(double x, int y) { return { pow(x, y) }; }
+	value_t operator()(double x, double y) { return { pow(x, y) }; }
+};
+
 /*void OpAnd(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarAnd(&*op1, &*op2, &result));}
 void OpOr(variant_t& op1, variant_t& op2, variant_t& result)	{
 	auto hr = VarOr(&*op1, &*op2, &result);
@@ -535,20 +554,6 @@ bool Context::Get(const tstring& name, variant_t& result) const
 }
 */
 // Operator precedence
-NScript::op_info NScript::_operators[Term][10] = {
-	{ { parser::end, nullptr } },
-	{ { parser::end, nullptr } },
-	{ { parser::end, nullptr } },
-	{ { parser::end, nullptr } },
-	{ {	parser::end, nullptr } },
-	{ { parser::end, nullptr } },
-	{ { parser::end, nullptr } },
-	{ { parser::end, nullptr } },
-{ { parser::plus,		op_add },{ parser::minus,	&op_sub },{ parser::end, NULL } },
-{ { parser::multiply,	&op_mul },{ parser::divide,&op_div },{ parser::idiv, &op_idiv },{ parser::mod, &op_mod },{ parser::end, NULL } },
-{ { parser::pwr,		&op_pow },{ parser::mdot,	&op_dot },{ parser::end, NULL } },
-{ { parser::unaryplus,&op_ppx },{ parser::unaryminus,&op_mmx },{ parser::newobj,&op_new },{ parser::not,	&op_not },{ parser::lnot, &op_lnot},{ parser::minus, &op_neg },{ parser::apo, &op_head },{ parser::end, NULL } },
-{ { parser::unaryplus,&op_xpp },{ parser::unaryminus,&op_xmm },{ parser::lpar, &op_call },{ parser::dot, &op_item },{ parser::lsquare, &op_index },{ parser::apo, &op_tail },{ parser::end, NULL } },
 /*	{{Parser::stmt,		&OpNull},	{Parser::end, NULL}},
 	{{Parser::comma,	&OpNull},	{Parser::end, NULL}},
 	{{Parser::assign,	&OpAssign},	{Parser::plusset, &OpXSet<OpAdd>}, {Parser::minusset, &OpXSet<OpSub>}, {Parser::mulset, &OpXSet<OpMul>}, {Parser::divset, &OpXSet<OpDiv>}, {Parser::idivset, &OpXSet<OpIDiv>}, { Parser::colon, &OpJoin }, {Parser::end, NULL}},
@@ -561,8 +566,25 @@ NScript::op_info NScript::_operators[Term][10] = {
 	{{Parser::multiply,	&OpMul},	{Parser::divide,&OpDiv},	{Parser::idiv, &OpIDiv},{Parser::mod, &OpMod},	{Parser::end, NULL}},
 	{{Parser::pwr,		&OpPow},	{Parser::mdot,	&OpDot},	{Parser::end, NULL}},
 	{{Parser::unaryplus,&OpPPX},	{Parser::unaryminus,&OpMMX},{Parser::newobj,&OpNew},{Parser::not,	&OpNot},{Parser::lnot, &OpLNot},{Parser::minus, &OpNeg},{ Parser::apo, &OpHead }, {Parser::end, NULL}},
-	{{Parser::unaryplus,&OpXPP},	{Parser::unaryminus,&OpXMM},{Parser::lpar, &OpCall},{Parser::dot, &OpItem}, {Parser::lsquare, &OpIndex},{ Parser::apo, &OpTail},{Parser::end, NULL}},*/
-};
+	{{Parser::unaryplus,&OpXPP},	{Parser::unaryminus,&OpXMM},{Parser::lpar, &OpCall},{Parser::dot, &OpItem}, {Parser::lsquare, &OpIndex},{ Parser::apo, &OpTail},{Parser::end, NULL}},
+};*/
+
+static auto s_operators = std::make_tuple(
+	std::tuple<>(),
+	std::tuple<>(),
+	std::tuple<>(),
+	std::tuple<>(),
+	std::tuple<>(),
+	std::tuple<>(),
+	std::tuple<>(),
+	std::tuple<>(),
+
+	std::tuple<op_add, op_sub>(),
+	std::tuple<op_mul, op_div>(),
+	std::tuple<op_pow>(),
+	std::tuple<>(),
+	std::tuple<>()
+);
 
 value_t NScript::eval(std::string_view script, std::error_code& ec)
 {
@@ -570,10 +592,12 @@ value_t NScript::eval(std::string_view script, std::error_code& ec)
 	_context.push();
 	try	{
 		_parser.init(script);
-		parse(Script, result, false);
+		parse<Script>(result, false);
 		if(_parser.get_token() != parser::end)	throw nscript_error::syntax_error;
 		return *result;
-	} catch(std::error_code e) { ec = e; }
+	}
+	catch(nscript_error e)	 { ec = e; }
+	catch(std::error_code e) { ec = e; }
 	_context.pop();
 	return result;
 }
@@ -693,92 +717,98 @@ void NScript::Parse(Precedence level, Parser::State state, variant_t& result)
 	_parser.SetState(current);
 }
 */
-void NScript::parse(Precedence level, value_t& result, bool skip)
+
+template <NScript::Precedence level, class OP> bool NScript::apply_op(OP op, value_t& result, bool skip)
+{
+	if(op.token == _parser.get_token()) {
+		if(op.token != parser::lpar && op.token != parser::lsquare && op.token != parser::dot)	_parser.next();
+		if(op.token == parser::ifop) {		// ternary "a?b:c" operator
+										//ParseIf(Logical, result, skip);
+			return true;
+		}
+
+		value_t left{ result }, right{ 0 };
+		if(!skip && level != Script)	result = 0;
+
+		// parse right-hand operand
+		if(op.token == parser::dot) { right = _parser.get_value(); _parser.next(); }	// special case for '.' operator
+		else if(level == Assignment || level == Unary)	parse<level>(right, skip);		// right-associative operators
+		else if(op.token != parser::unaryplus && op.token != parser::unaryminus  && op.token != parser::apo && !(level == Script && _parser.get_token() == parser::rcurly))
+			parse<level+1>(level == Script ? result : right, skip);					// left-associative operators
+																					
+		if(!skip)	result = std::visit(op, left, right);								// perform operator's action
+
+		if(level == Unary)	return false;
+		return true;
+	}
+	return false;
+}
+
+
+template <NScript::Precedence level> void NScript::parse(value_t& result, bool skip)
 {
 	// main parse loop
 	parser::token token = _parser.get_token();
-	if(level == Primary)	{
-		// primary expressions
-		bool local = false;
-		switch(token)	{
-			case parser::value:		if(!skip)	result = _parser.get_value();_parser.next();break;
-			case parser::my:	
-				if(_parser.next() != parser::name)	throw nscript_error::syntax_error;
-				local = true;
-/*			case Parser::name:		ParseVar(result, local, skip);	break;
-			case Parser::iffunc:	_parser.Next();Parse(Assignment, result, skip);ParseIf(Assignment, result, skip);break;
-			case Parser::forloop:	ParseForLoop(result, skip);break;
-			case Parser::idiv:		ParseFunc(result, skip); break;
-			case Parser::func:		ParseFunc(result, skip);break;
-			case Parser::object:	ParseObj(result, skip);break;*/
-			case parser::lpar:
-			case parser::lsquare:
-				_parser.next();
-				if(!skip)	result = 0;
-				parse(Statement, result, skip);
-				_parser.check_pair(token);
-				break;
-			case parser::lcurly:
-				_parser.next();
-				_context.push();
-				parse(Script, result, skip);
-//				*result;
-				_context.pop();
-				_parser.check_pair(token);
-				break;
-			case parser::end:		throw nscript_error::unexpected_eof;
-			default:				break;
-		}
-	}	else if (level == Statement)	{
-		// comma operator, non-associative
-		parse((Precedence)(level+1), result, skip);
-		if(_parser.get_token() == parser::comma)	{
-/*			value_t v = result;
-			SafeArray a(result);
-			result.Clear();
-			a.Put(0, *v, true);
-			do	{
-				_parser.Next();
-				Parse((Precedence)(level+1), v, skip);
-				a.Add(*v);
-			}	while(_parser.GetToken() == Parser::comma);*/
-		}
-	}	else	{
-		// all other
-		bool noop = true;
+	// all other
+	bool noop = true;
 
-		// parse left-hand operand (for binary operators)
-		if(level != Unary)	parse((Precedence)(level+1), result, skip);
-again:
-		if(_parser.get_token() == parser::end)	return;
-		for(op_info *pinfo = _operators[level];pinfo->op;pinfo++)	{
-			token = pinfo->token;
-			if(token == _parser.get_token())	{
-				if(token != parser::lpar && token != parser::lsquare && token != parser::dot)	_parser.next();
-				if(token == parser::ifop)	{		// ternary "a?b:c" operator
-					//ParseIf(Logical, result, skip);
-					goto again;
-				}
+	// parse left-hand operand (for binary operators)
+	if(level != Unary)	parse<(Precedence)(level + 1)>(result, skip);
+	if(_parser.get_token() == parser::end)	return;
 
-				value_t left{ result }, right{ 0 };
-				if(!skip && level != Script)	result = 0;
+	while(std::apply([&](auto ...op) { return (apply_op<level, decltype(op)>(op, result, skip) || ...); }, std::get<level>(s_operators))) noop = false;
 
-				// parse right-hand operand
-				if(token == parser::dot)	{right = _parser.get_value(); _parser.next();}		// special case for '.' operator
-				else if(level == Assignment || level == Unary)	parse(level, right, skip);		// right-associative operators
-				else if(token != parser::unaryplus && token != parser::unaryminus  && token != parser::apo && !(level == Script && _parser.get_token() == parser::rcurly))
-					parse((Precedence)(level+1), level == Script ? result : right, skip);		// left-associative operators
+	// for unary operators, return right-hand expression if no operators were found
+	if(level == Unary && noop)	parse<level+1>(result, skip);
+}
 
-				// perform operator's action
-				if(!skip)	result = (*pinfo->op)(left, right);
-				noop = false;
+template<> void NScript::parse<NScript::Statement>(value_t& result, bool skip)
+{
+	parser::token token = _parser.get_token();
+	parse<Assignment>(result, skip);
+	if(_parser.get_token() == parser::comma) {
+		/*			value_t v = result;
+		SafeArray a(result);
+		result.Clear();
+		a.Put(0, *v, true);
+		do	{
+		_parser.Next();
+		Parse((Precedence)(level+1), v, skip);
+		a.Add(*v);
+		}	while(_parser.GetToken() == Parser::comma);*/
+	}
+}
 
-				if(level == Unary)	break;
-				goto again;
-			}
-		}
-		// for unary operators, return right-hand expression if no operators were found
-		if(level == Unary && noop)	parse((Precedence)(level+1), result, skip);
+template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
+{
+	parser::token token = _parser.get_token();
+	bool local = false;
+	switch(token) {
+	case parser::value:		if(!skip)	result = _parser.get_value(); _parser.next(); break;
+	/*case parser::my:
+		if(_parser.next() != parser::name)	throw nscript_error::syntax_error;
+		local = true;
+		case Parser::name:		ParseVar(result, local, skip);	break;
+		case Parser::iffunc:	_parser.Next();Parse(Assignment, result, skip);ParseIf(Assignment, result, skip);break;
+		case Parser::forloop:	ParseForLoop(result, skip);break;
+		case Parser::idiv:		ParseFunc(result, skip); break;
+		case Parser::func:		ParseFunc(result, skip);break;
+		case Parser::object:	ParseObj(result, skip);break;*/
+	case parser::lpar:
+	case parser::lsquare:
+		_parser.next();
+		if(!skip)	result = 0;
+		parse<Statement>(result, skip);
+		_parser.check_pair(token);
+		break;
+	case parser::lcurly:
+		_parser.next();
+		_context.push();
+		parse<Script>(result, skip);
+		_context.pop();
+		_parser.check_pair(token);
+		break;
+	case parser::end:		throw nscript_error::unexpected_eof;
 	}
 }
 

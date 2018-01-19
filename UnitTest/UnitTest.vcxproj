@@ -101,6 +101,7 @@
       <ObjectFileName>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(SolutionDir)Build\$(Configuration)\pdb\$(ProjectName).pdb</ProgramDataBaseFileName>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -148,6 +149,7 @@
       <ObjectFileName>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\</ObjectFileName>
       <ProgramDataBaseFileName>$(SolutionDir)Build\$(Configuration)\pdb\$(ProjectName).pdb</ProgramDataBaseFileName>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -175,6 +177,7 @@
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <UseFullPaths>true</UseFullPaths>
       <PrecompiledHeaderOutputFile>$(SolutionDir)Build\$(Configuration)\obj\$(ProjectName)\$(ProjectName).pch</PrecompiledHeaderOutputFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

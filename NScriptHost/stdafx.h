@@ -8,8 +8,6 @@
 #include "targetver.h"
 
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
-#define _HAS_CXX17 1
-
 
 // Windows Header Files:
 #include <windows.h>

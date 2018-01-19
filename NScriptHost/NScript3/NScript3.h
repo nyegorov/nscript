@@ -137,8 +137,10 @@ protected:
 //	friend class Function;
 	enum Precedence	{Script = 0,Statement,Assignment,Conditional,Logical,Binary,Equality,Relation,Addition,Multiplication,Power,Unary,Functional,Primary,Term};
 
-	void parse(Precedence level, value_t& result, bool skip);
-/*	void Parse(Precedence level, Parser::State state, variant_t& result);
+	template <Precedence L> void parse(value_t& result, bool skip);
+	template <Precedence L, class OP> bool apply_op(OP op, value_t& result, bool skip);
+	//template <unsigned I = 0, typename...Tp> void apply_op(const std::tuple<Tp...>& t, value_t& result, bool skip);
+	/*	void Parse(Precedence level, Parser::State state, variant_t& result);
 	void ParseIf(Precedence level, variant_t& result, bool skip);
 	void ParseForLoop(variant_t& result, bool skip);
 	void ParseArgList(args_list& args, bool forceArgs);
@@ -150,8 +152,6 @@ protected:
 	context				_context;
 	context::var_names	_varnames;
 
-	typedef value_t op_func(value_t op1, value_t op2);
-	static struct op_info {parser::token token; op_func *op;}	_operators[Term][10];
 };
 /*
 // Generic implementation of IObject interface
