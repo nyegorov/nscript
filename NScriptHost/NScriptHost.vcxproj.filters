@@ -47,7 +47,7 @@
     <ClInclude Include="ComLite\RegKey.h">
       <Filter>ComLite</Filter>
     </ClInclude>
-    <ClInclude Include="NScript3\NScript3.h">
+    <ClInclude Include="NScript3\nscript3.h">
       <Filter>NScript3</Filter>
     </ClInclude>
   </ItemGroup>
@@ -67,7 +67,7 @@
     <ClCompile Include="ComLite\ClassFactory.cpp">
       <Filter>ComLite</Filter>
     </ClCompile>
-    <ClCompile Include="NScript3\NScript3.cpp">
+    <ClCompile Include="NScript3\nscript3.cpp">
       <Filter>NScript3</Filter>
     </ClCompile>
   </ItemGroup>

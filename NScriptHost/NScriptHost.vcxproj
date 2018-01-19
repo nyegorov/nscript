@@ -174,7 +174,7 @@
     <ClInclude Include="ComLite\ComLite.h" />
     <ClInclude Include="ComLite\Dispatch.h" />
     <ClInclude Include="ComLite\RegKey.h" />
-    <ClInclude Include="NScript3\NScript3.h" />
+    <ClInclude Include="NScript3\nscript3.h" />
     <ClInclude Include="NScript\NDispatch.h" />
     <ClInclude Include="NScript\NHash.h" />
     <ClInclude Include="NScript\NScript.h" />
@@ -183,7 +183,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ComLite\ClassFactory.cpp" />
-    <ClCompile Include="NScript3\NScript3.cpp" />
+    <ClCompile Include="NScript3\nscript3.cpp" />
     <ClCompile Include="NScriptHost.cpp" />
     <ClCompile Include="NScript\NDispatch.cpp" />
     <ClCompile Include="NScript\NScript.cpp" />

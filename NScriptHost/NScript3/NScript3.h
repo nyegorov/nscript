@@ -5,9 +5,11 @@
 
 #pragma once
 
-#include <cwctype>
+#include <chrono>
 #include <variant>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -18,12 +20,35 @@
 
 namespace nscript3	{
 
-enum class error_t {runtime_error, unexpected_eof, missing_character, unknown_var, syntax_error };
+enum class nscript_error {runtime_error = 1001, unexpected_eof, missing_character, unknown_var, syntax_error };
+
+class nscript_category_impl : public std::error_category
+{
+public:
+	virtual const char * name() const noexcept { return "nscript"; }
+	virtual std::string message(int ev) const {
+		switch(static_cast<nscript_error>(ev))	{
+		case nscript_error::runtime_error:		return "runtime error";
+		case nscript_error::unexpected_eof:		return "unexpected end";
+		case nscript_error::missing_character:	return "missing character";
+		case nscript_error::unknown_var:		return "unknown variable";
+		case nscript_error::syntax_error:		return "syntax error";
+		default:								return "unknown error";
+		}
+	};
+};
+
+const std::error_category& nscript_category();
+std::error_code make_error_code(nscript_error e);
+std::error_condition make_error_condition(nscript_error e);
 
 struct i_object;
+using std::string_view;
 using string_t = std::string;
+using date_t = std::chrono::steady_clock::time_point;
+using array_t = int*;
 using object_ptr = std::shared_ptr<i_object>;
-using value_t = std::variant<int, double, string_t, error_t, object_ptr>;
+using value_t = std::variant<int, double, string_t, date_t, object_ptr, array_t>;
 
 // Interface for extension objects
 struct i_object {
@@ -64,23 +89,23 @@ class parser	{
 public:
 	using char_t = string_t::value_type;
 	using state = size_t;
-	enum Token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon,apo,mdot};
+	enum token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon,apo,mdot};
 
 	parser();
-	void init(string_t expr)	{_content = expr; set_state(0);}
-	Token get_token()			{return _token;}
+	void init(string_view expr)	{_content = expr; set_state(0);}
+	token get_token()			{return _token;}
 	value_t get_value()			{return _value;}
 	string_t get_name()			{return _name;}
 	state get_state() const		{return _lastpos;}
 	void set_state(state state)	{_pos = state; _token=end; next();}
 //	tstring GetContent(State begin, State end)	{return _content.substr(begin, end-begin);}
-	void check_pair(Token token);
-	Token next();
+	void check_pair(token token);
+	token next();
 private:
-	typedef std::unordered_map<string_t, Token> Keywords;
+	typedef std::unordered_map<string_t, token> Keywords;
 	static Keywords	_keywords;
 	char_t			_decpt = std::use_facet<std::numpunct<char_t>>(std::locale()).decimal_point();
-	Token			_token;
+	token			_token;
 	string_t		_content;
 	state			_pos = 0;
 	state			_lastpos = 0;
@@ -103,7 +128,8 @@ public:
 	//NScript(const tchar* script = NULL, const Context *pcontext = NULL) : _context(pcontext)	{_parser.Init(script);}
 	NScript() : _context(nullptr)	{}
 	~NScript(void)						{};
-	value_t eval(string_t script);
+	value_t eval(string_view script) { std::error_code ec; return eval(script, ec); };
+	value_t eval(string_view script, std::error_code& ec);
 	void add(string_t name, value_t object)	{ _context.set(name, object); }
 
 protected:
@@ -124,8 +150,8 @@ protected:
 	context				_context;
 	context::var_names	_varnames;
 
-	typedef void OpFunc(value_t& op1, value_t& op2, value_t& result);
-	static struct OpInfo {parser::Token token; OpFunc* op;}	_operators[Term][10];
+	typedef value_t op_func(value_t op1, value_t op2);
+	static struct op_info {parser::token token; op_func *op;}	_operators[Term][10];
 };
 /*
 // Generic implementation of IObject interface
@@ -280,3 +306,5 @@ protected:
 };
 */
 }
+
+namespace std { template<> struct is_error_code_enum<nscript3::nscript_error> : public true_type {}; }

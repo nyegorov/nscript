@@ -14,24 +14,27 @@ namespace UnitTest
 
 struct print_value {
 	string operator() (int i) { return to_string(i); }
-	string operator() (double d) { return to_string(d); }
+	string operator() (double d) {
+		stringstream ss;
+		ss << d;
+		return ss.str(); }
 	string operator() (string s) { return s; }
-	string operator() (nscript3::error_t e) { return "error"; }
+	string operator() (nscript3::date_t dt) { return "date"; }
+	string operator() (nscript3::array_t a) { return "array"; }
 	string operator() (nscript3::object_ptr o) { return "object"; }
 };
 
 TEST_CLASS(NScript3Test)
 {
-	unsigned eval_hr(const char *expr) {
+	std::error_code eval_hr(const char *expr) {
 		nscript3::NScript ns;
 //		ns.AddObject(L"map", (nscript::IHash*)(new nscript::Hash()));
 //		ns.AddObject(TEXT("createobject"), new nscript::CreateObject());
-		auto v = ns.eval(expr);
-		if(auto perr = get_if<nscript3::error_t>(&v)) {
-			return (unsigned)*perr;
-		}
-		return 0;
+		std::error_code ec;
+		ns.eval(expr, ec);
+		return ec;
 	}
+
 	string eval(const char *expr) {
 		nscript3::NScript ns;
 		string		res;
@@ -88,14 +91,15 @@ public:
 	}
 	TEST_METHOD(Operators)
 	{
-		Assert::AreEqual("-1", eval("3^(2*(5-3))==81").c_str());
+		Assert::AreEqual("7.5", eval("3+4.5").c_str());
+		/*		Assert::AreEqual("-1", eval("3^(2*(5-3))==81").c_str());
 		Assert::AreEqual("-5", eval("x=1; y=x++; z=++x; y-z+-x").c_str());
 		Assert::AreEqual("3", eval("x=1; y=x--; z=--x; y-z+-x").c_str());
 		Assert::AreEqual("1,5", eval("5/2-5\\2+5%2").c_str());
 		Assert::AreEqual("A3", eval("upper(hex(0xAA & ~0x0F | 0x3))").c_str());
 		Assert::AreEqual("ok", eval("(1>2 || 1>=2 || 1<=2 || 1<2) && !(3==4) && (3!=4) ? 'ok' : 'fail'").c_str());
 		Assert::AreEqual("fail", eval("(2<=1 || 1<1 || 1>1 || 1<1) && !(3==3) && (3!=3) ? 'ok' : 'fail'").c_str());
-		Assert::AreEqual("-0,5", eval("x=1; y=2; x+=y; y-=x; x*=y; x\\=y; x-=1; y/=2").c_str());
+		Assert::AreEqual("-0,5", eval("x=1; y=2; x+=y; y-=x; x*=y; x\\=y; x-=1; y/=2").c_str());*/
 	}
 	TEST_METHOD(Functions)
 	{
@@ -214,14 +218,14 @@ public:
 	TEST_METHOD(Errors)
 	{
 		Assert::AreEqual("Missing ')' character", eval("(1,2").c_str());
-		Assert::AreEqual((unsigned)nscript3::error_t::missing_character, eval_hr("(1,2"));
-		Assert::AreEqual((unsigned)nscript3::error_t::missing_character, eval_hr("{c=1"));
-		Assert::AreEqual((unsigned)nscript3::error_t::missing_character, eval_hr("[1,2"));
+		Assert::IsTrue(nscript3::nscript_error::missing_character == eval_hr("(1,2"));
+		Assert::IsTrue(nscript3::nscript_error::missing_character == eval_hr("{c=1"));
+		Assert::IsTrue(nscript3::nscript_error::missing_character == eval_hr("[1,2"));
 		//Assert::AreEqual(E_NS_SYNTAXERROR,	eval_hr("5+"));
 		//Assert::AreEqual(DISP_E_UNKNOWNNAME, eval_hr("x+2"));
 		//Assert::AreEqual(E_NS_TOOMANYITERATIONS, eval_hr("for(;1;) {1}"));
-		Assert::AreEqual((unsigned)nscript3::error_t::syntax_error, eval_hr("object(x) {"));
-		Assert::AreEqual((unsigned)nscript3::error_t::syntax_error, eval_hr("sub(x,$);"));
+		Assert::IsTrue(nscript3::nscript_error::syntax_error == eval_hr("object(x) {"));
+		Assert::IsTrue(nscript3::nscript_error::syntax_error == eval_hr("sub(x,$);"));
 /*		Assert::AreEqual(E_NOTIMPL, eval_hr("(new object {})(0)"));
 		Assert::AreEqual(E_NOTIMPL, eval_hr("(new object {})=1"));
 		Assert::AreEqual(E_NOTIMPL, eval_hr("(new object {})[0]"));
@@ -235,9 +239,9 @@ public:
 		Assert::AreEqual(DISP_E_TYPEMISMATCH, eval_hr("(new map)[0][0]"));
 		Assert::AreEqual(E_OUTOFMEMORY, eval_hr("a=[];a[0x7fffffff]=1"));
 		Assert::AreEqual(E_NS_SYNTAXERROR, eval_hr("1e2.3"));
-		Assert::AreEqual(E_NS_SYNTAXERROR, eval_hr("1e2e3"));
-		Assert::AreEqual(DISP_E_OVERFLOW, eval_hr("0x1ffffffffffffffff"));
-		Assert::AreEqual(DISP_E_OVERFLOW, eval_hr("999999999999999999999999999"));*/
+		Assert::AreEqual(E_NS_SYNTAXERROR, eval_hr("1e2e3"));*/
+		Assert::IsTrue(std::errc::value_too_large == eval_hr("0x1ffffffffffffffff"));
+		Assert::IsTrue(std::errc::value_too_large == eval_hr("999999999999999999999999999"));
 	}
 
 };
