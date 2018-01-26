@@ -7,7 +7,8 @@
 #include <math.h>
 #include <time.h>
 #include <assert.h>
-#include "NScript3.h"
+#include "nscript3.h"
+#include "noperators.h"
 
 #undef min
 #undef max
@@ -221,60 +222,6 @@ STDMETHODIMP Function::Call(const variant_t& params, variant_t& result)	{
 
 inline bool is_numeric(value_t v) { return v.index() < 2; }
 
-enum class associativity { left, right };
-
-struct op_base {
-	const parser::token token = parser::token::end;
-	const associativity assoc = associativity::left;
-	template<class X, class Y> value_t operator()(X&& x, Y&& y) { throw nscript_error::syntax_error; return { 0 }; }
-};
-
-struct op_null : op_base { };
-
-struct op_add : op_base {
-	const parser::token token = parser::token::plus;
-	using op_base::operator();
-	value_t operator()(int x, int y) { return { x + y }; }
-	value_t operator()(int x, double y) { return { x + y }; }
-	value_t operator()(double x, int y) { return { x + y }; }
-	value_t operator()(double x, double y) { return { x + y }; }
-};
-
-struct op_sub : op_base {
-	const parser::token token = parser::token::minus;
-	using op_base::operator();
-	value_t operator()(int x, int y) { return { x - y }; }
-	value_t operator()(int x, double y) { return { x - y }; }
-	value_t operator()(double x, int y) { return { x - y }; }
-	value_t operator()(double x, double y) { return { x - y }; }
-};
-
-struct op_mul : op_base {
-	const parser::token token = parser::token::multiply;
-	using op_base::operator();
-	value_t operator()(int x, int y) { return { x * y }; }
-	value_t operator()(int x, double y) { return { x * y }; }
-	value_t operator()(double x, int y) { return { x * y }; }
-	value_t operator()(double x, double y) { return { x * y }; }
-};
-
-struct op_div : op_base {
-	const parser::token token = parser::token::divide;
-	using op_base::operator();
-	value_t operator()(int x, int y) { return { x / y }; }
-	value_t operator()(int x, double y) { return { x / y }; }
-	value_t operator()(double x, int y) { return { x / y }; }
-	value_t operator()(double x, double y) { return { x / y }; }
-};
-
-struct op_pow : op_base {
-	const parser::token token = parser::token::pwr;
-	using op_base::operator();
-	value_t operator()(int x, int y) { return { pow(x, y) }; }
-	value_t operator()(int x, double y) { return { pow(x, y) }; }
-	value_t operator()(double x, int y) { return { pow(x, y) }; }
-	value_t operator()(double x, double y) { return { pow(x, y) }; }
-};
 
 /*void OpAnd(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarAnd(&*op1, &*op2, &result));}
 void OpOr(variant_t& op1, variant_t& op2, variant_t& result)	{
@@ -458,12 +405,12 @@ struct copy_var {
 	copy_var(const context *from ,context *to) : _from(from), _to(to)	{};
 	void operator() (const string_t& name) { /*_to->set(_from->get(name));*/ }
 };
-/*
-Context::vars_t	Context::_globals = {
-	{ TEXT("empty"),	variant_t()},
-	{ TEXT("true"),		true},
-	{ TEXT("false"),	false },
-	{ TEXT("optional"),	variant_t(DISP_E_PARAMNOTFOUND, VT_ERROR) },
+
+context::vars_t	context::_globals {
+	{ "empty",	value_t()},
+	{ "true",	{-1} },
+	{ "false",	{0} },
+/*	{ TEXT("optional"),	variant_t(DISP_E_PARAMNOTFOUND, VT_ERROR) },
 	// Conversion
 	{ TEXT("int"),		new BuiltinFunction(1, FnCvt<VT_I4, LOCALE_INVARIANT>) },
 	{ TEXT("dbl"),		new BuiltinFunction(1, FnCvt<VT_R8, LOCALE_INVARIANT>) },
@@ -520,9 +467,9 @@ Context::vars_t	Context::_globals = {
 	{ TEXT("size"),		new BuiltinFunction(-1, FnSize) },
 	{ TEXT("rgb"),		new BuiltinFunction(3,  FnRgb) },
 	{ TEXT("min"),		new BuiltinFunction(-1, FnFind<VARCMP_LT>) },
-	{ TEXT("max"),		new BuiltinFunction(-1, FnFind<VARCMP_GT>) },
+	{ TEXT("max"),		new BuiltinFunction(-1, FnFind<VARCMP_GT>) },*/
 };
-*/
+
 context::context(const context *base, const var_names *vars) : _locals(1)
 {
 	if(base) {
@@ -531,28 +478,26 @@ context::context(const context *base, const var_names *vars) : _locals(1)
 		//_locals[0] = base->_locals[0];
 	}
 }
-/*
-variant_t& Context::Get(const tstring& name, bool local)
+
+value_t& context::get(string_t name, bool local)
 {
 	if(!local)	{
 		for(int i = (int)_locals.size() - 1; i >= -1; i--)	{
-			vars_t& plane = i<0?_globals:_locals[i];
-			vars_t::iterator p = plane.find(name);
-			if(p != plane.end()) return	p->second;
+			vars_t& plane = i < 0 ? _globals : _locals[i];
+			if(auto p = plane.find(name); p != plane.end()) return	p->second;
 		}
 	}
-	return _locals.back()[name] = static_cast<IObject*>(new Variable());
+	return _locals.back()[name] = std::make_shared<variable>();
 }
 
-bool Context::Get(const tstring& name, variant_t& result) const
+std::optional<value_t> context::get(string_t name) const
 {
-	for(std::vector<vars_t>::const_reverse_iterator ri = _locals.rbegin(); ri != _locals.rend(); ri++)	{
-		vars_t::const_iterator p = ri->find(name);
-		if(p != ri->end())	return result = p->second, true;
+	for(auto ri = _locals.rbegin(); ri != _locals.rend(); ri++)	{
+		if(auto p = ri->find(name);  p != ri->end())	return { p->second };
 	}
-	return false;
+	return {};
 }
-*/
+
 // Operator precedence
 /*	{{Parser::stmt,		&OpNull},	{Parser::end, NULL}},
 	{{Parser::comma,	&OpNull},	{Parser::end, NULL}},
@@ -570,9 +515,9 @@ bool Context::Get(const tstring& name, variant_t& result) const
 };*/
 
 static auto s_operators = std::make_tuple(
+	std::tuple<op_statmt>(),
 	std::tuple<>(),
-	std::tuple<>(),
-	std::tuple<>(),
+	std::tuple<op_assign>(),
 	std::tuple<>(),
 	std::tuple<>(),
 	std::tuple<>(),
@@ -582,8 +527,8 @@ static auto s_operators = std::make_tuple(
 	std::tuple<op_add, op_sub>(),
 	std::tuple<op_mul, op_div>(),
 	std::tuple<op_pow>(),
-	std::tuple<>(),
-	std::tuple<>()
+	std::tuple<op_ppx, op_mmx, op_neg>(),
+	std::tuple<op_xpp, op_xmm>()
 );
 
 value_t NScript::eval(std::string_view script, std::error_code& ec)
@@ -597,7 +542,7 @@ value_t NScript::eval(std::string_view script, std::error_code& ec)
 		return *result;
 	}
 	catch(nscript_error e)	 { ec = e; }
-	catch(std::error_code e) { ec = e; }
+	catch(std::errc e)		 { ec = make_error_code(e); }
 	_context.pop();
 	return result;
 }
@@ -691,32 +636,16 @@ void NScript::ParseObj(variant_t& result, bool skip)
 	Parse(Script,result,true);
 	if(!skip)	result = new Class(args, _parser.GetContent(state, _parser.GetState()).c_str(), &Context(&_context, &_varnames));
 	if(_parser.GetToken() == Parser::rcurly)	_parser.Next();
-}
-
-// Parse "var[:=]" statement
-void NScript::ParseVar(variant_t& result, bool local, bool skip)
-{
-	tstring name = _parser.GetName();
-	if(skip)	_varnames.insert(name);
-	_parser.Next();
-	if(_parser.GetToken() == Parser::setvar)	{
-		_parser.Next(); 
-		Parse(Assignment, result, skip); 
-		if(!skip)	_context.Set(name, result);
-	}	else	{
-		if(!skip)	result = _context.Get(name, local);
-	}
-}
+}*/
 
 // Jump to position <state>, parse expression and return back
-void NScript::Parse(Precedence level, Parser::State state, variant_t& result)
+template <NScript::Precedence level> void NScript::parse(parser::state state, value_t& result)
 {
-	Parser::State current = _parser.GetState();
-	_parser.SetState(state);
-	Parse(level, result, false);
-	_parser.SetState(current);
+	auto current = _parser.get_state();
+	_parser.set_state(state);
+	parse(level, result, false);
+	_parser.set_state(current);
 }
-*/
 
 template <NScript::Precedence level, class OP> bool NScript::apply_op(OP op, value_t& result, bool skip)
 {
@@ -727,18 +656,15 @@ template <NScript::Precedence level, class OP> bool NScript::apply_op(OP op, val
 			return true;
 		}
 
-		value_t left{ result }, right{ 0 };
-		if(!skip && level != Script)	result = 0;
+		value_t right;
 
 		// parse right-hand operand
 		if(op.token == parser::dot) { right = _parser.get_value(); _parser.next(); }	// special case for '.' operator
-		else if(level == Assignment || level == Unary)	parse<level>(right, skip);		// right-associative operators
+		else if(op.assoc == associativity::right)	parse<level>(right, skip);			// right-associative operators
 		else if(op.token != parser::unaryplus && op.token != parser::unaryminus  && op.token != parser::apo && !(level == Script && _parser.get_token() == parser::rcurly))
-			parse<level+1>(level == Script ? result : right, skip);					// left-associative operators
-																					
-		if(!skip)	result = std::visit(op, left, right);								// perform operator's action
+			parse<level+1>(right, skip);												// left-associative operators
 
-		if(level == Unary)	return false;
+		if(!skip)	result = std::visit(op, result, right);								// perform operator's action
 		return true;
 	}
 	return false;
@@ -749,17 +675,19 @@ template <NScript::Precedence level> void NScript::parse(value_t& result, bool s
 {
 	// main parse loop
 	parser::token token = _parser.get_token();
-	// all other
-	bool noop = true;
 
 	// parse left-hand operand (for binary operators)
-	if(level != Unary)	parse<(Precedence)(level + 1)>(result, skip);
+	parse<(Precedence)(level + 1)>(result, skip);
 	if(_parser.get_token() == parser::end)	return;
+	while(std::apply([&](auto ...op) { return (apply_op<level, decltype(op)>(op, result, skip) || ...); }, std::get<level>(s_operators)));
+}
 
-	while(std::apply([&](auto ...op) { return (apply_op<level, decltype(op)>(op, result, skip) || ...); }, std::get<level>(s_operators))) noop = false;
-
-	// for unary operators, return right-hand expression if no operators were found
-	if(level == Unary && noop)	parse<level+1>(result, skip);
+template<> void NScript::parse<NScript::Unary>(value_t& result, bool skip)
+{
+	parser::token token = _parser.get_token();
+	if(_parser.get_token() == parser::end)	return;
+	if(!std::apply([&](auto ...op) { return (apply_op<NScript::Unary, decltype(op)>(op, result, skip) || ...); }, std::get<NScript::Unary>(s_operators)))
+		parse<NScript::Functional>(result, skip);
 }
 
 template<> void NScript::parse<NScript::Statement>(value_t& result, bool skip)
@@ -785,11 +713,16 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 	bool local = false;
 	switch(token) {
 	case parser::value:		if(!skip)	result = _parser.get_value(); _parser.next(); break;
-	/*case parser::my:
+	case parser::my:
 		if(_parser.next() != parser::name)	throw nscript_error::syntax_error;
 		local = true;
-		case Parser::name:		ParseVar(result, local, skip);	break;
-		case Parser::iffunc:	_parser.Next();Parse(Assignment, result, skip);ParseIf(Assignment, result, skip);break;
+		[[fallthrough]];
+	case parser::name:
+		if(skip)	_varnames.insert(_parser.get_name());
+		else		result = _context.get(_parser.get_name(), local);
+		_parser.next();
+		break;
+/*		case Parser::iffunc:	_parser.Next();Parse(Assignment, result, skip);ParseIf(Assignment, result, skip);break;
 		case Parser::forloop:	ParseForLoop(result, skip);break;
 		case Parser::idiv:		ParseFunc(result, skip); break;
 		case Parser::func:		ParseFunc(result, skip);break;

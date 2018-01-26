@@ -6,6 +6,7 @@
 #pragma once
 
 #include <chrono>
+#include <optional>
 #include <variant>
 #include <string>
 #include <string_view>
@@ -20,7 +21,7 @@
 
 namespace nscript3	{
 
-enum class nscript_error {runtime_error = 1001, unexpected_eof, missing_character, unknown_var, syntax_error };
+enum class nscript_error {runtime_error = 1001, unexpected_eof, missing_character, unknown_var, missing_lval, syntax_error };
 
 class nscript_category_impl : public std::error_category
 {
@@ -31,6 +32,7 @@ public:
 		case nscript_error::runtime_error:		return "runtime error";
 		case nscript_error::unexpected_eof:		return "unexpected end";
 		case nscript_error::missing_character:	return "missing character";
+		case nscript_error::missing_lval:		return "missing lvalue";
 		case nscript_error::unknown_var:		return "unknown variable";
 		case nscript_error::syntax_error:		return "syntax error";
 		default:								return "unknown error";
@@ -62,7 +64,7 @@ struct i_object {
 
 // Interface for objects, accessible by reference (L-values)
 struct i_value	{
-	virtual value_t& getref() const = 0;
+	virtual value_t& get_ref() = 0;
 };
 
 using args_list = std::vector<string_t>;
@@ -75,8 +77,8 @@ public:
 	context(const context *base, const var_names *vars = NULL);
 	void push()		{_locals.push_back(vars_t());}
 	void pop()		{_locals.pop_back();}
-/*	value_t& get(string name, bool local = false);
-	bool get(const string& name, value_t& result) const;*/
+	value_t& get(string_t name, bool local = false);
+	std::optional<value_t> get(string_t name) const;
 	void set(string_t name, value_t value)		{_locals.front()[name] = value;}
 private:
 	typedef std::unordered_map<string_t, value_t>	vars_t;
@@ -140,46 +142,32 @@ protected:
 	template <Precedence L> void parse(value_t& result, bool skip);
 	template <Precedence L, class OP> bool apply_op(OP op, value_t& result, bool skip);
 	//template <unsigned I = 0, typename...Tp> void apply_op(const std::tuple<Tp...>& t, value_t& result, bool skip);
-	/*	void Parse(Precedence level, Parser::State state, variant_t& result);
-	void ParseIf(Precedence level, variant_t& result, bool skip);
+	template <Precedence L> void parse(parser::state state, value_t& result);
+	/*void ParseIf(Precedence level, variant_t& result, bool skip);
 	void ParseForLoop(variant_t& result, bool skip);
 	void ParseArgList(args_list& args, bool forceArgs);
 	void ParseFunc(variant_t& args, bool skip);
-	void ParseObj(variant_t& result, bool skip);
-	void ParseVar(variant_t& result, bool local, bool skip);*/
+	void ParseObj(variant_t& result, bool skip);*/
 
 	parser				_parser;
 	context				_context;
 	context::var_names	_varnames;
 
 };
-/*
-// Generic implementation of IObject interface
-class Object : public IObject	{
-public:
-	Object() : _counter(0)		{};
-	STDMETHODIMP_(ULONG) AddRef()	{return InterlockedIncrement(&_counter);}
-	STDMETHODIMP_(ULONG) Release()	{return InterlockedDecrement(&_counter) > 0 ? _counter : (delete this, 0);}
-	STDMETHODIMP QueryInterface(REFIID iid, void ** ppvObj)	{
-		if(!ppvObj) return E_POINTER;
-		if (iid == IID_IUnknown)	{*ppvObj = static_cast<IUnknown*>(this); AddRef(); return S_OK;}
-		if (iid == IID_IObject)		{*ppvObj =  static_cast<IObject*>(this); AddRef(); return S_OK;}
-		return *ppvObj = NULL, E_NOINTERFACE;
-	}
-	STDMETHODIMP New(variant_t& result)								{return E_NOTIMPL;}
-	STDMETHODIMP Get(variant_t& result)								{
-		if(V_VT(&result) != VT_UNKNOWN || V_UNKNOWN(&result) != (IUnknown*)this)	result = this; 
-		return S_OK;
-	}
-	STDMETHODIMP Set(const variant_t& value)						{return E_NOTIMPL;}
-	STDMETHODIMP Call(const variant_t& params, variant_t& result)	{return E_NOTIMPL;}
-	STDMETHODIMP Item(const variant_t& item, variant_t& result)		{return E_NOTIMPL;}
-	STDMETHODIMP Index(const variant_t& index, variant_t& result)	{return E_NOTIMPL;}
-protected:
-	virtual ~Object()	{};
-	long		_counter;
-};
 
+// Generic implementation of IObject interface
+class object : public i_object	{
+public:
+	object()	{};
+	value_t create() const				{ throw std::errc::not_supported; }
+	value_t get() const					{ throw std::errc::not_supported; }
+	void set(value_t value)				{ throw std::errc::not_supported; }
+	value_t call(value_t params) const	{ throw std::errc::not_supported; }
+	value_t item(value_t item) const	{ throw std::errc::not_supported; }
+	value_t index(value_t index) const	{ throw std::errc::not_supported; }
+	virtual ~object()	{};
+};
+/*
 // Wrapper for SafeArray* set of API functions
 class SafeArray {
 public:
@@ -202,30 +190,23 @@ protected:
 	variant_t&	_sa;
 	int			_count;
 };
-
+*/
 // Class that represents script variables
-class Variable	: public Object, public IValue {
+class variable	: public object, public i_value {
 public:
-	Variable() : _value()											{V_VT(&_value) = VT_NULL;}
-	STDMETHODIMP_(ULONG) AddRef()									{return Object::AddRef();}
-	STDMETHODIMP_(ULONG) Release()									{return Object::Release();}
-	STDMETHODIMP QueryInterface(REFIID iid, void ** ppvObj)			{
-		if (ppvObj && iid == IID_IValue)	{*ppvObj =  static_cast<IValue*>(this); AddRef(); return S_OK;}	
-		else return Object::QueryInterface(iid, ppvObj);
-	}
-	STDMETHODIMP Get(variant_t& result)								{result = *GetPtr(); return V_VT(&_value) == VT_NULL ? DISP_E_UNKNOWNNAME : S_OK;}
-	STDMETHODIMP Set(const variant_t& value)						{*GetPtr() = value; return S_OK;}
-	STDMETHODIMP New(variant_t& result)								{return IObjectPtr(*GetPtr())->New(result);}
-	STDMETHODIMP Call(const variant_t& params, variant_t& result)	{return IObjectPtr(*GetPtr())->Call(params, result);}
-	STDMETHODIMP Item(const variant_t& item, variant_t& result)		{return IObjectPtr(*GetPtr())->Item(item, result);}
-	STDMETHODIMP Index(const variant_t& index, variant_t& result);
-	STDMETHODIMP GetRef(variant_t** ppvar)							{*ppvar = &_value;return S_OK;}
+	variable() : _value()											{}
+	value_t get() const					{ return _value; }
+	void set(value_t value)				{ _value = value; }
+	value_t create() const				{ return std::get<object_ptr>(_value)->create(); }
+	value_t call(value_t params) const	{ return std::get<object_ptr>(_value)->call(params); }
+	value_t item(value_t item) const	{ return std::get<object_ptr>(_value)->item(item); }
+	//value_t index(value_t index);
+	value_t& get_ref()					{ return _value; }
 protected:
-	variant_t* GetPtr()												{variant_t *pv;GetRef(&pv);return pv;}
-	~Variable()			{}
-	variant_t			_value;
+	//value_t* get_ptr()				{variant_t *pv;GetRef(&pv);return pv;}
+	value_t			_value;
 };
-
+/*
 // Proxy object for array index operator (i.e., a[i])
 class Indexer : public Variable	{
 public:

@@ -19,6 +19,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UnitTest", "UnitTest\UnitTest.vcxproj", "{0CEE6E63-7366-4A55-A76C-54A5A88C9DE5}"
+	ProjectSection(ProjectDependencies) = postProject
+		{F90C4C74-DEE4-4880-9DD0-4F3413B16B32} = {F90C4C74-DEE4-4880-9DD0-4F3413B16B32}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Testbench", "Testbench\Testbench.vcxproj", "{083917AE-66D4-4AA8-BE11-9AAE8C96D43F}"
 	ProjectSection(ProjectDependencies) = postProject
