@@ -19,7 +19,18 @@ struct print_value {
 		ss << d;
 		return ss.str(); }
 	string operator() (string s) { return s; }
-	string operator() (nscript3::date_t dt) { return "date"; }
+	string operator() (nscript3::date_t dt) { 
+		
+		auto t = std::chrono::system_clock::to_time_t(dt);
+		tm tm;
+		localtime_s(&tm, &t);
+		stringstream ss;
+		if(tm.tm_hour || tm.tm_min || tm.tm_sec)
+			ss << std::put_time(&tm, tm.tm_sec ? "%d.%m.%Y %H:%M:%S" : "%d.%m.%Y %H:%M");
+		else 
+			ss << std::put_time(&tm, "%d.%m.%Y");
+		return ss.str();
+	}
 	string operator() (nscript3::array_t a) { return "array"; }
 	string operator() (nscript3::object_ptr o) { return "object"; }
 };
@@ -41,9 +52,11 @@ TEST_CLASS(NScript3Test)
 		//ns.AddObject(L"map", (nscript::IHash*)(new nscript::Hash()));
 		//ns.AddObject(TEXT("createobject"), new nscript::CreateObject());
 
-		auto v = ns.eval(expr);
+		error_code ec;
+		auto v = ns.eval(expr, ec);
+		if(!ec)	return std::visit(print_value(), v);
+		else	return ec.message();
 
-		return std::visit(print_value(), v);
 
 /*		if(FAILED(hr)) {
 			IErrorInfoPtr pei;
@@ -70,12 +83,12 @@ public:
 
 	TEST_METHOD(Parsing)
 	{
-		Assert::AreEqual("2.100000", eval("2.10000000000000000000000000000000000001").c_str());
+		Assert::AreEqual("2.1", eval("2.10000000000000000000000000000000000001").c_str());
 		Assert::AreEqual("42", eval("42").c_str(), "integers", LINE_INFO());
 		Assert::AreEqual("-123456789", eval("-123456789").c_str(), "long int", LINE_INFO());
 		Assert::AreEqual("31", eval("0x1F").c_str(), "hex", LINE_INFO());
-		Assert::AreEqual("3,14", eval("3.14").c_str(), "float", LINE_INFO());
-		Assert::AreEqual("-1,314", eval("-3.14e-1-1e+0").c_str(), "exp", LINE_INFO());
+		Assert::AreEqual("3.14", eval("3.14").c_str(), "float", LINE_INFO());
+		Assert::AreEqual("-1.314", eval("-3.14e-1-1e+0").c_str(), "exp", LINE_INFO());
 		Assert::AreEqual("a\"b\"'c'", eval("'a\"b\"'+\"'c'\"").c_str(), "string", LINE_INFO());
 		Assert::AreEqual("3", eval("a=3;a").c_str(), "variable", LINE_INFO());
 		Assert::AreEqual("26.10.1974", eval("#26.10.74#").c_str(), "date", LINE_INFO());
@@ -95,11 +108,11 @@ public:
 		Assert::AreEqual("81", eval("3^(2*(5-3))").c_str());
 		Assert::AreEqual("-5", eval("x=1; y=x++; z=++x; y-z+-x").c_str());
 		Assert::AreEqual("3", eval("x=1; y=x--; z=--x; y-z+-x").c_str());
-		Assert::AreEqual("1,5", eval("5/2-5\\2+5%2").c_str());
+		Assert::AreEqual("1.5", eval("5/2-5\\2+5%2").c_str());
 		Assert::AreEqual("A3", eval("upper(hex(0xAA & ~0x0F | 0x3))").c_str());
 		Assert::AreEqual("ok", eval("(1>2 || 1>=2 || 1<=2 || 1<2) && !(3==4) && (3!=4) ? 'ok' : 'fail'").c_str());
 		Assert::AreEqual("fail", eval("(2<=1 || 1<1 || 1>1 || 1<1) && !(3==3) && (3!=3) ? 'ok' : 'fail'").c_str());
-		Assert::AreEqual("-0,5", eval("x=1; y=2; x+=y; y-=x; x*=y; x\\=y; x-=1; y/=2").c_str());
+		Assert::AreEqual("-0.5", eval("x=1; y=2; x+=y; y-=x; x*=y; x\\=y; x-=1; y/=2").c_str());
 	}
 	TEST_METHOD(Functions)
 	{

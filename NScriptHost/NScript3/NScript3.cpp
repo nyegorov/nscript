@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <ctime>
 #include <locale>
 #include <limits>
 #include <algorithm>
@@ -857,6 +858,40 @@ void parser::read_number(char_t c)
 
 // Parse date from input stream
 void parser::read_date(char_t quote) {
+	enum date_stage { day = 0, mon, year, hour, min, sec } stage = day;
+	int date[6] = { 0 };
+	char_t c;
+	while(c = read()) {
+		if(isdigit(c)) {
+			date[stage] = date[stage] * 10 + (c - '0');
+		} else if(c == '.') {
+			if(stage > year)					throw nscript_error::syntax_error;
+			stage = date_stage(stage + 1);
+		} else if(c == ':') {
+			if(stage < hour || stage == sec)	throw nscript_error::syntax_error;
+			stage = date_stage(stage + 1);
+		} else if(c == ' ') {
+			if(stage != year && stage != hour)	throw nscript_error::syntax_error;
+			stage = hour;
+		} else	break;
+	};
+	if(c != quote)							throw nscript_error::syntax_error;
+	if(date[2] < 100)	date[2] += date[2] < 50 ? 2000 : 1900;
+	if(date[0] <= 0 || date[0] > 31)		throw nscript_error::syntax_error;
+	if(date[1] <= 0 || date[1] > 12)		throw nscript_error::syntax_error;
+	if(date[2] < 1900 || date[2] > 9999)	throw nscript_error::syntax_error;
+	if(date[3] < 0 || date[3] > 23)			throw nscript_error::syntax_error;
+	if(date[4] < 0 || date[4] > 59)			throw nscript_error::syntax_error;
+	if(date[5] < 0 || date[5] > 59)			throw nscript_error::syntax_error;
+	tm tm;
+	tm.tm_mday = date[0];	
+	tm.tm_mon = date[1] - 1;
+	tm.tm_year = date[2] - 1900;
+	tm.tm_hour = date[3];
+	tm.tm_min = date[4];
+	tm.tm_sec = date[5];
+	auto time = std::mktime(&tm);
+	_value = std::chrono::system_clock::from_time_t(time);
 }
 
 // Parse quoted string from input stream

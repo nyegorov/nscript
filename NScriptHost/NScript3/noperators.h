@@ -4,6 +4,7 @@
 
 namespace nscript3 {
 
+using std::string;
 enum class associativity { left, right };
 
 template<class T> struct op_base {
@@ -25,10 +26,15 @@ struct op_add : op_base<op_add> {
 	template<class X> value_t operator()(X x, object_ptr y) { return std::visit([this, x](auto y) { return operator()(x, y); }, y->get()); }
 	value_t operator()(object_ptr x, object_ptr y)			{ return std::visit([this](auto x, auto y) { return operator()(x, y); }, x->get(), y->get()); }
 
-	value_t operator()(int x, int y)		{ return { x + y }; }
-	value_t operator()(int x, double y)		{ return { x + y }; }
-	value_t operator()(double x, int y)		{ return { x + y }; }
-	value_t operator()(double x, double y)	{ return { x + y }; }
+	value_t operator()(int x, int y)		{ return x + y; }
+	value_t operator()(int x, double y)		{ return x + y; }
+	value_t operator()(double x, int y)		{ return x + y; }
+	value_t operator()(double x, double y)	{ return x + y; }
+	value_t operator()(string x, string y)	{ return x + y; }
+	value_t operator()(string x, int y)		{ return x + std::to_string(y); }
+	value_t operator()(string x, double y)	{ return x + std::to_string(y); }
+	value_t operator()(int x, string y)		{ return std::to_string(x) + y; }
+	value_t operator()(double x, string y)	{ return std::to_string(x) + y; }
 };
 
 struct op_sub : op_base<op_sub> {

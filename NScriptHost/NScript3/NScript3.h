@@ -47,7 +47,7 @@ std::error_condition make_error_condition(nscript_error e);
 struct i_object;
 using std::string_view;
 using string_t = std::string;
-using date_t = std::chrono::steady_clock::time_point;
+using date_t = std::chrono::system_clock::time_point;
 using array_t = int*;
 using object_ptr = std::shared_ptr<i_object>;
 using value_t = std::variant<int, double, string_t, date_t, object_ptr, array_t>;
