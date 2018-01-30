@@ -119,6 +119,13 @@ struct op_assign : op_base<op_assign> {
 	template<class X, class Y> value_t operator()(X x, Y y) { throw std::errc::operation_not_supported; return { 0 }; }
 };
 
+struct op_index : op_base<op_index> {
+	const parser::token token = parser::token::lsquare;
+	template<class Y> value_t operator()(object_ptr x, Y y) { return x->index(y); }
+	//value_t operator()(object_ptr x, object_ptr y) { auto v = y->get();  return x->set(v), v; }
+	template<class X, class Y> value_t operator()(X x, Y y) { throw std::errc::operation_not_supported; return { 0 }; }
+};
+
 struct op_statmt : op_base<op_statmt> {
 	const parser::token token = parser::token::stmt;
 	template<class X, class Y> value_t operator()(X, Y y) { return { y }; }

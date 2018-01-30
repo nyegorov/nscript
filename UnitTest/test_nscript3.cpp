@@ -12,29 +12,6 @@ namespace UnitTest
 //template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 //template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
-struct print_value {
-	string operator() (int i) { return to_string(i); }
-	string operator() (double d) {
-		stringstream ss;
-		ss << d;
-		return ss.str(); }
-	string operator() (string s) { return s; }
-	string operator() (nscript3::date_t dt) { 
-		
-		auto t = std::chrono::system_clock::to_time_t(dt);
-		tm tm;
-		localtime_s(&tm, &t);
-		stringstream ss;
-		if(tm.tm_hour || tm.tm_min || tm.tm_sec)
-			ss << std::put_time(&tm, tm.tm_sec ? "%d.%m.%Y %H:%M:%S" : "%d.%m.%Y %H:%M");
-		else 
-			ss << std::put_time(&tm, "%d.%m.%Y");
-		return ss.str();
-	}
-	string operator() (nscript3::array_t a) { return "array"; }
-	string operator() (nscript3::object_ptr o) { return "object"; }
-};
-
 TEST_CLASS(NScript3Test)
 {
 	std::error_code eval_hr(const char *expr) {
@@ -54,7 +31,7 @@ TEST_CLASS(NScript3Test)
 
 		error_code ec;
 		auto v = ns.eval(expr, ec);
-		if(!ec)	return std::visit(print_value(), v);
+		if(!ec)	return to_string(v);
 		else	return ec.message();
 
 
@@ -215,17 +192,6 @@ public:
 				dist = sub(p1, p2) {sqrt((p1.x-p2.x)^2 + (p1.y-p2.y)^2)};\
 				p1=new point(3,4); p2 = new point(3, -1);\
 				p1.length() + dist(p1,p2);\
-			").c_str());
-	}
-	TEST_METHOD(Dispatch)
-	{
-		Assert::AreEqual("matrix has you, neo!", eval("\
-				o = CreateObject(\"MSXML2.DOMDocument\");\
-				o.loadXML('<Root><Item Name=\"choosen one\">neo</Item></Root>');\
-				neo = o.selectSingleNode('/*/Item[@Name=\"choosen one\"]').Text;\
-				o.selectSingleNode('/*/Item[@Name=\"choosen one\"]').Text = 'matrix';\
-				mat = o.selectNodes('/*/Item[@Name=\"choosen one\"]').item[0].Text;\
-				mat + ' has you, ' + neo + '!'\
 			").c_str());
 	}
 	TEST_METHOD(Errors)

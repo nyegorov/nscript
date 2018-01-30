@@ -48,23 +48,20 @@ struct i_object;
 using std::string_view;
 using string_t = std::string;
 using date_t = std::chrono::system_clock::time_point;
-using array_t = int*;
 using object_ptr = std::shared_ptr<i_object>;
-using value_t = std::variant<int, double, string_t, date_t, object_ptr, array_t>;
+using value_t = std::variant<int, double, string_t, date_t, object_ptr>;
+
+std::string to_string(value_t v);
 
 // Interface for extension objects
 struct i_object {
 	virtual value_t create() const = 0;					// return new <object>
-	virtual value_t get()  const = 0;					// return <object>
+	virtual value_t get()  = 0;							// return <object>
 	virtual void set(value_t value) = 0;				// <object> = value
-	virtual value_t call(value_t params) const = 0;		// return <object>(params)
-	virtual value_t item(value_t item) const = 0;		// return <object>.item
-	virtual value_t index(value_t index) const = 0;		// return <object>[index]
-};
-
-// Interface for objects, accessible by reference (L-values)
-struct i_value	{
-	virtual value_t& get_ref() = 0;
+	virtual value_t call(value_t params) = 0;			// return <object>(params)
+	virtual value_t item(value_t item) = 0;				// return <object>.item
+	virtual value_t index(value_t index) = 0;			// return <object>[index]
+	virtual string_t print() const = 0;
 };
 
 using args_list = std::vector<string_t>;
@@ -160,66 +157,16 @@ class object : public i_object	{
 public:
 	object()	{};
 	value_t create() const				{ throw std::errc::not_supported; }
-	value_t get() const					{ throw std::errc::not_supported; }
+	value_t get()						{ throw std::errc::not_supported; }
 	void set(value_t value)				{ throw std::errc::not_supported; }
-	value_t call(value_t params) const	{ throw std::errc::not_supported; }
-	value_t item(value_t item) const	{ throw std::errc::not_supported; }
-	value_t index(value_t index) const	{ throw std::errc::not_supported; }
+	value_t call(value_t params)		{ throw std::errc::not_supported; }
+	value_t item(value_t item)			{ throw std::errc::not_supported; }
+	value_t index(value_t index)		{ throw std::errc::not_supported; }
+	string_t print() const				{ throw std::errc::not_supported; }
 	virtual ~object()	{};
 };
-/*
-// Wrapper for SafeArray* set of API functions
-class SafeArray {
-public:
-	SafeArray(variant_t& sa) :_sa(sa), _count(0)	{};
-	~SafeArray();
-	void Put(long index, const variant_t& value, bool forceArray = false);
-	void Add(const variant_t& value)				{Put(Count(), value);}
-	void Redim(long size);
-	void Append(const variant_t& value);
-	void Get(long index, variant_t& value) const;
-	void Remove(long index);
-	long Count() const;
-	variant_t* GetData();
-	variant_t& operator [](long index);
 
-protected:
-	bool IsArray() const { return V_ISARRAY(&_sa) != 0; }
-	bool IsEmpty() const { return V_VT(&_sa) == VT_EMPTY; }
-
-	variant_t&	_sa;
-	int			_count;
-};
-*/
-// Class that represents script variables
-class variable	: public object, public i_value {
-public:
-	variable() : _value()											{}
-	value_t get() const					{ return _value; }
-	void set(value_t value)				{ _value = value; }
-	value_t create() const				{ return std::get<object_ptr>(_value)->create(); }
-	value_t call(value_t params) const	{ return std::get<object_ptr>(_value)->call(params); }
-	value_t item(value_t item) const	{ return std::get<object_ptr>(_value)->item(item); }
-	//value_t index(value_t index);
-	value_t& get_ref()					{ return _value; }
-protected:
-	//value_t* get_ptr()				{variant_t *pv;GetRef(&pv);return pv;}
-	value_t			_value;
-};
-/*
-// Proxy object for array index operator (i.e., a[i])
-class Indexer : public Variable	{
-public:
-	Indexer(IValuePtr value, const variant_t& index) : _index(index), _value(value)	{};
-	STDMETHODIMP GetRef(variant_t** ppvar)							{_value->GetRef(ppvar);*ppvar = &(SafeArray(**ppvar)[_index]);return S_OK;}
-	STDMETHODIMP Get(variant_t& result);
-protected:
-	~Indexer()	{}
-	IValuePtr	_value;
-	long		_index;
-};
-
-// User-defined functions
+/*// User-defined functions
 class Function	: public Object {
 public:
 	Function(const args_list& args, const tchar* body, const Context *pcontext = NULL) : _args(args), _body(body), _context(pcontext)	{}

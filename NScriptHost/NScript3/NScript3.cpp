@@ -1,9 +1,11 @@
 #include "stdafx.h"
 #include <ctime>
+#include <iomanip>
 #include <locale>
 #include <limits>
 #include <algorithm>
 #include <functional>
+#include <sstream>
 #include <tuple>
 #include <math.h>
 #include <time.h>
@@ -25,6 +27,38 @@ const std::error_category& nscript_category()
 std::error_code make_error_code(nscript_error e)			{ return std::error_code(static_cast<int>(e), nscript_category()); }
 std::error_condition make_error_condition(nscript_error e)	{ return std::error_condition(static_cast<int>(e), nscript_category()); }
 
+
+std::string to_string(value_t v)
+{
+	struct print_value {
+		string operator() (int i) { return std::to_string(i); }
+		string operator() (double d) {
+			std::stringstream ss;
+			ss << d;
+			return ss.str();
+		}
+		string operator() (string s) { return s; }
+		string operator() (nscript3::date_t dt) {
+
+			auto t = std::chrono::system_clock::to_time_t(dt);
+			tm tm;
+			localtime_s(&tm, &t);
+			std::stringstream ss;
+			if(tm.tm_hour || tm.tm_min || tm.tm_sec)
+				ss << std::put_time(&tm, tm.tm_sec ? "%d.%m.%Y %H:%M:%S" : "%d.%m.%Y %H:%M");
+			else
+				ss << std::put_time(&tm, "%d.%m.%Y");
+			return ss.str();
+		}
+		string operator() (nscript3::object_ptr o) { 
+			auto v = o->get(); 
+			if(auto po = std::get_if<object_ptr>(&v); *po != o)	return to_string(v); 
+			return o->print();
+		}
+	};
+
+	return std::visit(print_value(), v);
+}
 
 // Globals
 /*
@@ -91,6 +125,70 @@ value_t& operator *(value_t& v)	{
 	}
 	return v;
 }
+
+// Class that represents script variables
+class variable : public object, public std::enable_shared_from_this<variable> {
+	value_t			_value;
+public:
+	variable() : _value() {}
+	value_t get() { return _value; }
+	void set(value_t value) { _value = value; }
+	value_t create() const { return std::get<object_ptr>(_value)->create(); }
+	value_t call(value_t params) { return std::get<object_ptr>(_value)->call(params); }
+	value_t item(value_t item) { return std::get<object_ptr>(_value)->item(item); }
+	value_t index(value_t index) { 
+		if(auto pobj = std::get_if<object_ptr>(&_value); pobj)	return (*pobj)->index(index);
+		if(index == value_t{ 0 })	return { shared_from_this() };
+		throw std::errc::invalid_argument;
+	}
+	string_t print() const { return std::get<object_ptr>(_value)->print(); }
+};
+
+
+// Class that represents arrays
+class narray : public object, public std::enable_shared_from_this<narray> {
+	std::vector<value_t>	_items;
+public:
+	narray() {}
+	narray(value_t val) : _items { val } {}
+	value_t get() {
+		if(_items.size() == 1) return _items.front(); 
+		return { std::static_pointer_cast<i_object>(shared_from_this()) };
+	}
+	value_t index(value_t index) {
+		if(auto pi = std::get_if<int>(&index))	return std::make_shared<indexer>(shared_from_this(), *pi);
+		throw std::errc::invalid_argument;
+	}
+	string_t print() const { 
+		std::stringstream ss;
+		ss << '[';
+		std::stringstream::pos_type pos = 0;
+		for(auto& v : _items) { 
+			if(ss.tellp() > 1) ss << "; "; 
+			ss << to_string(v);
+		}
+		ss << ']';
+		return ss.str();
+	}
+	void push_back(const value_t& val)	{ _items.push_back(val); }
+	void push_back(value_t&& val)		{ _items.push_back(std::forward<value_t>(val)); }
+protected:
+	value_t& get_index(int index) { return _items[index]; }
+
+	class indexer : public object {
+		std::shared_ptr<narray>	_data;
+		int						_index;
+	public:
+		indexer(std::shared_ptr<narray> arr, int index) : _index(index), _data(arr) {};
+		value_t get()			{ return _data->get_index(_index); }
+		void set(value_t value) { _data->get_index(_index) = value; }
+		//value_t call(value_t params) const { return op_call(_data->get_index(_index)->call(params); }
+		//value_t item(value_t item) const { return _data->get_index(_index)->item(item); }
+		//value_t index(value_t index) const { return _data->get_index(_index)->index(index); }
+	};
+};
+
+
 /*
 // is v an object?
 IObjectPtr GetObject(const variant_t& v)	{
@@ -529,7 +627,7 @@ static auto s_operators = std::make_tuple(
 	std::tuple<op_mul, op_div>(),
 	std::tuple<op_pow>(),
 	std::tuple<op_ppx, op_mmx, op_neg>(),
-	std::tuple<op_xpp, op_xmm>()
+	std::tuple<op_xpp, op_xmm, op_index>()
 );
 
 value_t NScript::eval(std::string_view script, std::error_code& ec)
@@ -696,15 +794,14 @@ template<> void NScript::parse<NScript::Statement>(value_t& result, bool skip)
 	parser::token token = _parser.get_token();
 	parse<Assignment>(result, skip);
 	if(_parser.get_token() == parser::comma) {
-		/*			value_t v = result;
-		SafeArray a(result);
-		result.Clear();
-		a.Put(0, *v, true);
-		do	{
-		_parser.Next();
-		Parse((Precedence)(level+1), v, skip);
-		a.Add(*v);
-		}	while(_parser.GetToken() == Parser::comma);*/
+		auto a = std::make_shared<narray>(result);
+		do {
+			value_t v;
+			_parser.next();
+			parse<Assignment>(v, skip);
+			a->push_back(v);
+		} while(_parser.get_token() == parser::comma);
+		result = a;
 	}
 }
 
