@@ -142,8 +142,8 @@ public:
 		Assert::AreEqual("3", eval("size([4,5,6])").c_str());
 		Assert::AreEqual("10", eval("a=[[1,2,[3,4]],[4,5,6]];a[0][1]=a[0][2][1]+a[1][2]").c_str());
 		Assert::AreEqual("bbb", eval("a=[];a=add(a,'aaa');a=add(a,'bbb');a=remove(a,0);a[0]").c_str());
-		Assert::AreEqual("3", eval("m=new map; m['abc']=3; m['abc']").c_str());
-		Assert::AreEqual("", eval("m=map; mm=new m; mm[0]").c_str());
+		//Assert::AreEqual("3", eval("m=new map; m['abc']=3; m['abc']").c_str());
+		//Assert::AreEqual("", eval("m=map; mm=new m; mm[0]").c_str());
 	}
 	TEST_METHOD(Functional)
 	{

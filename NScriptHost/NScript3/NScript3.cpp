@@ -27,10 +27,27 @@ const std::error_category& nscript_category()
 std::error_code make_error_code(nscript_error e)			{ return std::error_code(static_cast<int>(e), nscript_category()); }
 std::error_condition make_error_condition(nscript_error e)	{ return std::error_condition(static_cast<int>(e), nscript_category()); }
 
+bool is_empty(const value_t& v) { return v.index() == 0; }
+
+class narray;
+narray* to_array_if(const value_t& v)
+{
+	if(auto pobj = std::get_if<object_ptr>(&v); pobj)
+		if(auto parr = std::dynamic_pointer_cast<narray>(*pobj); parr)	return parr.get();
+	return nullptr;
+}
+
+std::shared_ptr<narray> to_array(const value_t& v)
+{
+	if(auto pobj = std::get_if<object_ptr>(&v); pobj)
+		if(auto parr = std::dynamic_pointer_cast<narray>(*pobj); parr)	return parr;
+	return is_empty(v) ? std::make_shared<narray>() : std::make_shared<narray>(v);
+}
 
 std::string to_string(value_t v)
 {
 	struct print_value {
+		string operator() (std::monostate)	{ return "[empty]"; }
 		string operator() (int i) { return std::to_string(i); }
 		string operator() (double d) {
 			std::stringstream ss;
@@ -59,6 +76,33 @@ std::string to_string(value_t v)
 
 	return std::visit(print_value(), v);
 }
+
+int to_int(value_t v)
+{
+	struct to_int_t {
+		int operator() (std::monostate)	{ return 0; }
+		int operator() (int i)			{ return i; }
+		int operator() (double d)		{ return (int)d; }
+		int operator() (string s)		{ return std::stoi( s ); }
+		int operator() (date_t dt)		{ throw nscript_error::type_mismatch; }
+		int operator() (object_ptr o)	{ throw nscript_error::type_mismatch; }
+	};
+	return std::visit(to_int_t(), v);
+}
+
+double to_double(value_t v)
+{
+	struct to_double_t {
+		double operator() (std::monostate) { return 0.; }
+		double operator() (int i) { return i; }
+		double operator() (double d) { return d; }
+		double operator() (string s) { return std::stod(s); }
+		double operator() (date_t dt) { throw nscript_error::type_mismatch; }
+		double operator() (object_ptr o) { throw nscript_error::type_mismatch; }
+	};
+	return std::visit(to_double_t(), v);
+}
+
 
 // Globals
 /*
@@ -172,22 +216,39 @@ public:
 	}
 	void push_back(const value_t& val)	{ _items.push_back(val); }
 	void push_back(value_t&& val)		{ _items.push_back(std::forward<value_t>(val)); }
-protected:
-	value_t& get_index(int index) { return _items[index]; }
+	std::vector<value_t>& items()		{ return _items; }
 
+protected:
 	class indexer : public object {
 		std::shared_ptr<narray>	_data;
 		int						_index;
 	public:
 		indexer(std::shared_ptr<narray> arr, int index) : _index(index), _data(arr) {};
-		value_t get()			{ return _data->get_index(_index); }
-		void set(value_t value) { _data->get_index(_index) = value; }
-		//value_t call(value_t params) const { return op_call(_data->get_index(_index)->call(params); }
-		//value_t item(value_t item) const { return _data->get_index(_index)->item(item); }
-		//value_t index(value_t index) const { return _data->get_index(_index)->index(index); }
+		value_t get()			{ return _data->items()[_index]; }
+		void set(value_t value) { _data->items()[_index] = value; }
+		value_t call(value_t params)	{ return std::visit(op_call(), _data->items()[_index], params); }
+		//value_t item(value_t item)		{ return std::visit(op_item(), _data->items()[_index], item); }
+		value_t index(value_t index)	{ return std::visit(op_index(), _data->items()[_index], index); }
 	};
 };
 
+// Built-in functions
+template<class FN> class builtin_function : public object {
+public:
+	builtin_function(int count, FN func) : _count(count), _func(func) {}
+	value_t call(value_t params) {
+		if(auto pa = to_array_if(params); pa) {
+			if(_count >= 0 && _count != pa->items().size())	throw nscript_error::bad_param_count;
+			return _func(pa->items().size(), pa->items().data());
+		}
+		if(_count >= 0 && _count != 1)	throw nscript_error::bad_param_count;
+		return _func(1, &params);
+	}
+protected:
+	const int			_count;
+	FN					_func;
+};
+template<class FN> object_ptr make_fn(int count, FN fn) { return std::make_shared<builtin_function<FN>>(count, fn); }
 
 /*
 // is v an object?
@@ -318,8 +379,6 @@ STDMETHODIMP Function::Call(const variant_t& params, variant_t& result)	{
 }
 */
 // Operators
-
-inline bool is_numeric(value_t v) { return v.index() < 2; }
 
 
 /*void OpAnd(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarAnd(&*op1, &*op2, &result));}
@@ -509,6 +568,15 @@ context::vars_t	context::_globals {
 	{ "empty",	value_t()},
 	{ "true",	{-1} },
 	{ "false",	{0} },
+
+	//{ "sin",		make_fun(1, [](int argc, value_t argv[] ) { return to_ }) },
+	{ "size",		make_fn(-1, [](int argc, value_t argv[]){ return argc; }) },
+	{ "add",		make_fn(2, [](int argc, value_t argv[])	{ auto a = to_array(argv[0]); return a->items().push_back(argv[1]), a; }) },
+	{ "remove",		make_fn(2, [](int argc, value_t argv[]) { auto a = to_array(argv[0]); return a->items().erase( a->items().begin() + to_int(argv[1])), a; }) },
+
+
+
+
 /*	{ TEXT("optional"),	variant_t(DISP_E_PARAMNOTFOUND, VT_ERROR) },
 	// Conversion
 	{ TEXT("int"),		new BuiltinFunction(1, FnCvt<VT_I4, LOCALE_INVARIANT>) },
@@ -627,7 +695,7 @@ static auto s_operators = std::make_tuple(
 	std::tuple<op_mul, op_div>(),
 	std::tuple<op_pow>(),
 	std::tuple<op_ppx, op_mmx, op_neg>(),
-	std::tuple<op_xpp, op_xmm, op_index>()
+	std::tuple<op_xpp, op_xmm, op_call, op_index>()
 );
 
 value_t NScript::eval(std::string_view script, std::error_code& ec)
@@ -763,6 +831,9 @@ template <NScript::Precedence level, class OP> bool NScript::apply_op(OP op, val
 		else if(op.token != parser::unaryplus && op.token != parser::unaryminus  && op.token != parser::apo && !(level == Script && _parser.get_token() == parser::rcurly))
 			parse<level+1>(right, skip);												// left-associative operators
 
+		if(op.deref == dereference::left  || op.deref == dereference::both)	*result;
+		if(op.deref == dereference::right || op.deref == dereference::both)	*right;
+
 		if(!skip)	result = std::visit(op, result, right);								// perform operator's action
 		return true;
 	}
@@ -794,12 +865,12 @@ template<> void NScript::parse<NScript::Statement>(value_t& result, bool skip)
 	parser::token token = _parser.get_token();
 	parse<Assignment>(result, skip);
 	if(_parser.get_token() == parser::comma) {
-		auto a = std::make_shared<narray>(result);
+		auto a = std::make_shared<narray>(*result);
 		do {
 			value_t v;
 			_parser.next();
 			parse<Assignment>(v, skip);
-			a->push_back(v);
+			a->push_back(*v);
 		} while(_parser.get_token() == parser::comma);
 		result = a;
 	}
@@ -828,7 +899,7 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 	case parser::lpar:
 	case parser::lsquare:
 		_parser.next();
-		if(!skip)	result = 0;
+		if(!skip)	result = value_t{};
 		parse<Statement>(result, skip);
 		_parser.check_pair(token);
 		break;

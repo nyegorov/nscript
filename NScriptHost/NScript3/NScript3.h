@@ -21,7 +21,7 @@
 
 namespace nscript3	{
 
-enum class nscript_error {runtime_error = 1001, unexpected_eof, missing_character, unknown_var, missing_lval, syntax_error };
+enum class nscript_error {runtime_error = 1001, unexpected_eof, missing_character, unknown_var, missing_lval, syntax_error, bad_param_count, type_mismatch };
 
 class nscript_category_impl : public std::error_category
 {
@@ -35,6 +35,8 @@ public:
 		case nscript_error::missing_lval:		return "missing lvalue";
 		case nscript_error::unknown_var:		return "unknown variable";
 		case nscript_error::syntax_error:		return "syntax error";
+		case nscript_error::bad_param_count:	return "bad parameters count";
+		case nscript_error::type_mismatch:		return "type mismatch";
 		default:								return "unknown error";
 		}
 	};
@@ -49,9 +51,11 @@ using std::string_view;
 using string_t = std::string;
 using date_t = std::chrono::system_clock::time_point;
 using object_ptr = std::shared_ptr<i_object>;
-using value_t = std::variant<int, double, string_t, date_t, object_ptr>;
+using value_t = std::variant<std::monostate, int, double, string_t, date_t, object_ptr>;
 
 std::string to_string(value_t v);
+int to_int(value_t v);
+double to_double(value_t v);
 
 // Interface for extension objects
 struct i_object {
