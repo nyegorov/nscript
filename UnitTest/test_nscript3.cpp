@@ -85,11 +85,11 @@ public:
 		Assert::AreEqual("81", eval("3^(2*(5-3))").c_str());
 		Assert::AreEqual("-5", eval("x=1; y=x++; z=++x; y-z+-x").c_str());
 		Assert::AreEqual("3", eval("x=1; y=x--; z=--x; y-z+-x").c_str());
-		Assert::AreEqual("1.5", eval("5/2-5\\2+5%2").c_str());
+		Assert::AreEqual("1.5", eval("5/2.-5/2+5%2").c_str());
 		Assert::AreEqual("A3", eval("upper(hex(0xAA & ~0x0F | 0x3))").c_str());
 		Assert::AreEqual("ok", eval("(1>2 || 1>=2 || 1<=2 || 1<2) && !(3==4) && (3!=4) ? 'ok' : 'fail'").c_str());
 		Assert::AreEqual("fail", eval("(2<=1 || 1<1 || 1>1 || 1<1) && !(3==3) && (3!=3) ? 'ok' : 'fail'").c_str());
-		Assert::AreEqual("-0.5", eval("x=1; y=2; x+=y; y-=x; x*=y; x\\=y; x-=1; y/=2").c_str());
+		Assert::AreEqual("-0.5", eval("x=1; y=2; x+=y; y-=x; x*=y; x/=y; x-=1; y/=2.").c_str());
 	}
 	TEST_METHOD(Functions)
 	{

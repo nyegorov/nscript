@@ -144,6 +144,7 @@ protected:
 	template <Precedence L, class OP> bool apply_op(OP op, value_t& result, bool skip);
 	//template <unsigned I = 0, typename...Tp> void apply_op(const std::tuple<Tp...>& t, value_t& result, bool skip);
 	template <Precedence L> void parse(parser::state state, value_t& result);
+	template <Precedence L> void parse_if(value_t& result, bool skip);
 	/*void ParseIf(Precedence level, variant_t& result, bool skip);
 	void ParseForLoop(variant_t& result, bool skip);
 	void ParseArgList(args_list& args, bool forceArgs);

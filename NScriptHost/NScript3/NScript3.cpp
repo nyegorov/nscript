@@ -250,312 +250,6 @@ protected:
 };
 template<class FN> object_ptr make_fn(int count, FN fn) { return std::make_shared<builtin_function<FN>>(count, fn); }
 
-/*
-// is v an object?
-IObjectPtr GetObject(const variant_t& v)	{
-	IObjectPtr pobj;
-	return V_VT(&v) == VT_UNKNOWN && SUCCEEDED(V_UNKNOWN(&v)->QueryInterface(IID_IObject, reinterpret_cast<void **>(&pobj))) ? pobj : NULL;
-}
-
-// SafeArray
-
-SafeArray::~SafeArray()				{
-	while(_count--)	SafeArrayUnaccessData(V_ARRAY(&_sa));
-}
-
-void SafeArray::Redim(long size)
-{
-	assert(_count == 0);
-	SAFEARRAYBOUND sab = {(ULONG)size,0};
-	if(!IsArray())	{
-		long i = 0;
-		variant_t v = _sa;
-		_sa.Clear();
-		V_VT(&_sa) = VT_VARIANT|VT_ARRAY;
-		V_ARRAY(&_sa) = SafeArrayCreate(VT_VARIANT, 1, &sab);
-		if(V_ARRAY(&_sa) == NULL)	Check(E_OUTOFMEMORY);
-#pragma warning(suppress: 6387)
-		Check(SafeArrayPutElement(V_ARRAY(&_sa), &i, (void*)&v));	
-	}	else	{
-		Check(SafeArrayRedim(V_ARRAY(&_sa), &sab));
-	}
-}
-
-void SafeArray::Put(long index, const variant_t& value, bool forceArray)
-{
-	if(!IsArray() && index == 0 && !forceArray)	_sa = value;
-	else	{
-		if(_count)	Check(DISP_E_ARRAYISLOCKED);
-		if(index >= Count())	Redim(index+1);
-		Check(SafeArrayPutElement(V_ARRAY(&_sa), &index, (void*)&value));	
-	}
-}
-
-void SafeArray::Get(long index, variant_t& value) const	{
-	value.Clear();
-	if(IsArray())	Check(SafeArrayGetElement(V_ARRAY(&_sa), &index, &value));
-	else if(index == 0 && !IsEmpty())	value = _sa;
-	else			Check(DISP_E_BADINDEX);
-};
-
-void SafeArray::Remove(long index)
-{
-	if(index < 0 || index >= Count())	Check(DISP_E_BADINDEX);
-	if(!IsArray())	_sa = variant_t();
-	else if(Count() == 2) { 
-		index = 1 - index; 	
-		variant_t tmp;
-		Check(SafeArrayGetElement(V_ARRAY(&_sa), &index, &tmp));
-		_sa = tmp;
-	}	else {
-		for(long i = index + 1; i < Count(); i++)	Put(i - 1, (*this)[i]);
-		Redim(Count() - 1);
-	}
-}
-
-void SafeArray::Append(const variant_t& value)
-{
-	SafeArray right(const_cast<variant_t&>(value));
-	for(long i = 0; i < right.Count(); i++)	Add(right[i]);
-}
-
-long SafeArray::Count() const		{
-	long ubound = 0;
-	if(IsEmpty())		ubound = -1;
-	else if(IsArray())	Check(SafeArrayGetUBound(V_ARRAY(&_sa), 1, &ubound));
-	return ubound+1;
-}
-variant_t* SafeArray::GetData()	{
-	variant_t *p = &_sa;
-	if(IsArray())		{Check(SafeArrayAccessData(V_ARRAY(&_sa), (void**)&p)); _count++;}
-	return p;
-}
-
-variant_t& SafeArray::operator [](long index)	{
-	variant_t* p = &_sa;
-	if(_count)	Check(DISP_E_ARRAYISLOCKED);
-	if(index >= Count())	Redim(index+1);
-	if(IsArray())		Check(SafeArrayPtrOfIndex(V_ARRAY(&_sa), &index, (void**)&p));
-	return *p;
-}
-
-// Variable
-
-STDMETHODIMP Variable::Index(const variant_t& index, variant_t& result)		{
-	IObjectPtr pobj = GetObject(_value);
-	return pobj ? 
-		pobj->Index(index, result) : 
-		(result = static_cast<IObject*>(new Indexer(this, index)), S_OK);
-}
-
-STDMETHODIMP Indexer::Get(variant_t& result)								{
-	variant_t v(IUnknownPtr(_value).GetInterfacePtr());
-	return SafeArray(*v).Get(_index, result), S_OK;
-}
-
-// Class
-
-STDMETHODIMP Class::New(variant_t& result)	{
-	Instance *pinst = new Class::Instance(_body.c_str(), &_context);
-	result = pinst;
-	return pinst->Init(_args, _params);
-}
-
-STDMETHODIMP Class::Instance::Init(const args_list& args, const variant_t& params)	{
-	HRESULT hr = ProcessArgsList(args, params, _script);
-	return FAILED(hr) ? hr : (_script.Parse(NScript::Script, variant_t(), false), S_OK);
-}
-
-STDMETHODIMP Class::Instance::Item(const variant_t& item, variant_t& result)	{
-	return _script.Exec(bstr_t(item), result);
-}
-
-// Function
-
-STDMETHODIMP Function::Call(const variant_t& params, variant_t& result)	{
-	NScript script(_body.c_str(), &_context);
-	HRESULT hr = ProcessArgsList(_args, params, script);
-	return FAILED(hr) ? hr : script.Exec(NULL, result);
-}
-*/
-// Operators
-
-
-/*void OpAnd(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarAnd(&*op1, &*op2, &result));}
-void OpOr(variant_t& op1, variant_t& op2, variant_t& result)	{
-	auto hr = VarOr(&*op1, &*op2, &result);
-	if(FAILED(hr)) {
-		IObjectPtr pobj = GetObject(op2);
-		if(pobj)	Check(pobj->Call(*op1, result));
-		return;
-	}
-	Check(hr);
-}
-void OpGT(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)==VARCMP_GT;}
-void OpGE(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)>=VARCMP_EQ;}
-void OpLT(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)==VARCMP_LT;}
-void OpLE(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)<=VARCMP_EQ;}
-void OpEqu(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)==VARCMP_EQ;}
-void OpNeq(variant_t& op1, variant_t& op2, variant_t& result)	{result = VarCmp(&*op1, &*op2, LOCALE_USER_DEFAULT)!=VARCMP_EQ;}
-void OpLAnd(variant_t& op1, variant_t& op2, variant_t& result)	{result = (bool)*op1 && (bool)*op2;}
-void OpLOr(variant_t& op1, variant_t& op2, variant_t& result)	{result = (bool)*op1 || (bool)*op2;}
-void OpLNot(variant_t& op1, variant_t& op2, variant_t& result)	{result = !(bool)*op2;}
-void OpNot(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarNot(&*op2, &result));}
-void OpNeg(variant_t& op1, variant_t& op2, variant_t& result)	{Check(VarNeg(&*op2, &result));}
-void OpNull(variant_t& op1, variant_t& op2, variant_t& result)	{}
-void OpIndex(variant_t& op1, variant_t& op2, variant_t& result)	{
-	IObjectPtr pobj = GetObject(op1);
-	if(pobj)	Check(pobj->Index(*op2, result));	else	SafeArray(op1).Get(*op2, result);
-	//if(pobj == NULL || FAILED(pobj->Index(*op2, result)))	SafeArray(op1).Get(*op2, result);
-}
-void OpJoin(variant_t& op1, variant_t& op2, variant_t& result)	{ SafeArray a(result = *op1); a.Append(*op2); }
-void OpCall(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op1)->Call(*op2, result));}
-void OpAssign(variant_t& op1, variant_t& op2, variant_t& result){Check(IObjectPtr(op1)->Set(*op2));result = op1;}
-void OpItem(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op1)->Item(*op2, result)); }
-void OpDot(variant_t& op1, variant_t& op2, variant_t& result)	{result = new Composer(*op1, *op2); }
-void OpNew(variant_t& op1, variant_t& op2, variant_t& result)	{Check(IObjectPtr(op2)->New(result));}
-
-template <void OP(variant_t& op1, variant_t& op2, variant_t& result)>
-void OpXSet(variant_t& op1, variant_t& op2, variant_t& result)	{
-	IObjectPtr pobj(op1);
-	Check(pobj->Get(op1));
-	OP(op1, op2, result);
-	Check(pobj->Set(result));	
-}
-void OpPPX(variant_t& op1, variant_t& op2, variant_t& result)	{OpXSet<OpAdd>(op2,variant_t(1L),result);}
-void OpMMX(variant_t& op1, variant_t& op2, variant_t& result)	{OpXSet<OpSub>(op2,variant_t(1L),result);}
-void OpXPP(variant_t& op1, variant_t& op2, variant_t& result)	{variant_t v;result = op1;*result;OpXSet<OpAdd>(op1,variant_t(1L),v);}
-void OpXMM(variant_t& op1, variant_t& op2, variant_t& result)	{variant_t v;result = op1;*result;OpXSet<OpSub>(op1,variant_t(1L),v);}
-void OpHead(variant_t& op1, variant_t& op2, variant_t& result) { SafeArray a(*op2); a.Get(0, result); }
-void OpTail(variant_t& op1, variant_t& op2, variant_t& result) { SafeArray a(result = *op1); a.Remove(0); }
-
-// Functions
-
-template<typename T, T FN(T)> void FnX(int n, const variant_t v[], variant_t& result)	{result = FN((T)v[0]);}
-template<VARTYPE T, LCID lcid> void FnCvt(int n, const variant_t v[], variant_t& result)			{
-	Check(VariantChangeTypeEx(&result, &v[0], lcid, VARIANT_ALPHABOOL, T));
-}
-// Date
-void FnNow(int n, const variant_t v[], variant_t& result)		{SYSTEMTIME st;GetLocalTime(&st);SystemTimeToVariantTime(&st,&V_R8(&result));V_VT(&result) = VT_DATE;}
-void FnDay(int n, const variant_t v[], variant_t& result)		{SYSTEMTIME st;VariantTimeToSystemTime(V_DATE(&v[0]), &st);result = (long)st.wDay;}
-void FnMonth(int n, const variant_t v[], variant_t& result)		{SYSTEMTIME st;VariantTimeToSystemTime(V_DATE(&v[0]), &st);result = (long)st.wMonth;}
-void FnYear(int n, const variant_t v[], variant_t& result)		{SYSTEMTIME st;VariantTimeToSystemTime(V_DATE(&v[0]), &st);result = (long)st.wYear;}
-void FnHour(int n, const variant_t v[], variant_t& result)		{SYSTEMTIME st;VariantTimeToSystemTime(V_DATE(&v[0]), &st);result = (long)st.wHour;}
-void FnMinute(int n, const variant_t v[], variant_t& result)	{SYSTEMTIME st;VariantTimeToSystemTime(V_DATE(&v[0]), &st);result = (long)st.wMinute;}
-void FnSecond(int n, const variant_t v[], variant_t& result)	{SYSTEMTIME st;VariantTimeToSystemTime(V_DATE(&v[0]), &st);result = (long)st.wSecond;}
-void FnDayOfWeek(int n, const variant_t v[], variant_t& result)	{SYSTEMTIME st;VariantTimeToSystemTime(V_DATE(&v[0]), &st);result = (long)st.wDayOfWeek;}
-void FnDayOfYear(int n, const variant_t v[], variant_t& result)	{UDATE ud;VarUdateFromDate(V_DATE(&v[0]), 0, &ud);result = (long)ud.wDayOfYear;}
-// Math
-void FnPi(int n, const variant_t v[], variant_t& result)		{result  = (double)3.141592653589793238462643383279502884197169399375105820974944;}
-void FnRnd(int n, const variant_t v[], variant_t& result)		{result  = (double)rand()/(double)RAND_MAX;}
-void FnSgn(int n, const variant_t v[], variant_t& result)		{long l = v[0]; result = (l<0?-1L:l>0?1L:0L);}
-void FnAtan2(int n, const variant_t v[], variant_t& result)		{result = atan2((double)v[0], (double)v[1]);}
-void FnFract(int n, const variant_t v[], variant_t& result)		{result = (double)v[0] - (long)v[0];}
-// String
-void FnChr(int n, const variant_t v[], variant_t& result)		{tchar cc[2] = {(tchar)(long)v[0], 0};  result = cc;}
-void FnAsc(int n, const variant_t v[], variant_t& result)		{bstr_t b(v[0]); result = b.length() ? (long)*(tchar*)b : 0L;}
-void FnLen(int n, const variant_t v[], variant_t& result)		{result = (long)((bstr_t)v[0]).length();}
-void FnLeft(int n, const variant_t v[], variant_t& result)		{bstr_t b(v[0]);result = b; SysReAllocStringLen(&V_BSTR(&result), b, (long)v[1]);}
-void FnRight(int n, const variant_t v[], variant_t& result)		{bstr_t b(v[0]);result = b; SysReAllocStringLen(&V_BSTR(&result), (LPOLESTR)b + b.length() - (long)v[1], (long)v[1]);}
-void FnMid(int n, const variant_t v[], variant_t& result)		{bstr_t b(v[0]);result = b; SysReAllocStringLen(&V_BSTR(&result), (LPOLESTR)b + (long)v[1], (long)v[2]);}
-void FnUpper(int n, const variant_t v[], variant_t& result)		{bstr_t b(v[0]);CharUpperBuff((tchar *)b, b.length());result = b;}
-void FnLower(int n, const variant_t v[], variant_t& result)		{bstr_t b(v[0]);CharLowerBuff((tchar *)b, b.length());result = b;}
-void FnString(int n, const variant_t v[], variant_t& result)	{bstr_t b = v[1]; result = tstring((long)v[0],*(tchar*)b).c_str();}
-void FnReplace(int n, const variant_t v[], variant_t& result)	{
-	tstring s((bstr_t)v[0]); 
-	bstr_t from(v[1]), to(v[2]);
-	tstring::size_type p = 0;
-	for(;(p = s.find(from, p)) != tstring::npos;p+=to.length())	s.replace(p, from.length(), to, to.length());
-	result = s.c_str();
-}
-void FnInstr(int n, const variant_t v[], variant_t& result)		{result = (long)tstring((bstr_t)v[0]).find((bstr_t)v[1]);}
-void FnFormat(int n, const variant_t v[], variant_t& result)	{bstr_t b; VarFormat(&const_cast<variant_t&>(v[0]), (bstr_t)v[1], 0, 0, 0, &b.GetBSTR());result = b;}
-void FnHex(int n, const variant_t v[], variant_t& result)		{
-	FnCvt<VT_I4, LOCALE_INVARIANT>(n, v, result);
-	TCHAR s[1024]; wsprintf(s, TEXT("%X"), V_I4(&result)); result = s;
-}
-// Array
-void FnAdd(int n, const variant_t v[], variant_t& result)		{SafeArray(result=v[0]).Add(v[1]);}
-void FnRemove(int n, const variant_t v[], variant_t& result)	{SafeArray(result = v[0]).Remove((long)v[1]);}
-
-class FoldFunction : public Object
-{
-	IObjectPtr	_pfun;
-public:
-	FoldFunction(const variant_t& fun) : _pfun(GetObject(fun)) {}
-	STDMETHODIMP Call(const variant_t& params, variant_t& result) {
-		if(!_pfun)	return E_NS_SYNTAXERROR;
-		variant_t vtmp;
-		SafeArray src(const_cast<variant_t&>(params)), tmp(vtmp);
-		result = src[0];
-		for(long i = 1; i<src.Count(); i++) {
-			tmp.Put(0, result);
-			tmp.Put(1, src[i]);
-			Check(_pfun->Call(vtmp, result));
-		}
-		return S_OK;
-	}
-};
-
-class MapFunction : public Object
-{
-	IObjectPtr	_pfun;
-public:
-	MapFunction(const variant_t& fun) : _pfun(GetObject(fun)) {}
-	STDMETHODIMP Call(const variant_t& params, variant_t& result) {
-		if(!_pfun)	return E_NS_SYNTAXERROR;
-		SafeArray src(const_cast<variant_t&>(params)), dst(result);
-		dst.Redim(src.Count());
-		for(long i = 0; i<src.Count(); i++) {
-			variant_t tmp;
-			Check(_pfun->Call(src[i], tmp));
-			dst.Put(i, tmp);
-		}
-		return S_OK;
-	}
-};
-
-class FilterFunction : public Object
-{
-	IObjectPtr	_pfun;
-public:
-	FilterFunction(const variant_t& fun) : _pfun(GetObject(fun)) {}
-	STDMETHODIMP Call(const variant_t& params, variant_t& result) {
-		if(!_pfun)	return E_NS_SYNTAXERROR;
-		SafeArray src(const_cast<variant_t&>(params)), dst(result);
-		for(long i = 0; i<src.Count(); i++) {
-			variant_t tmp;
-			Check(_pfun->Call(src[i], tmp));
-			if((bool)*tmp)	dst.Add(src[i]);
-		}
-		return S_OK;
-	}
-};
-
-void FnMap(int n, const variant_t v[], variant_t& result)  { result = new MapFunction(v[0]); }
-void FnFold(int n, const variant_t v[], variant_t& result) { result = new FoldFunction(v[0]); }
-void FnFilter(int n, const variant_t v[], variant_t& result) { result = new FilterFunction(v[0]); }
-void FnHead(int n, const variant_t v[], variant_t& result) { result = v[0]; }
-void FnTail(int n, const variant_t v[], variant_t& result) {
-	if(n < 2)	return;
-	SafeArray a(result);
-	a.Redim(n - 1);
-	for(int i = 1; i < n; i++)		a.Put(i-1, v[i]);
-}
-
-// Other
-void FnSize(int n, const variant_t v[], variant_t& result)		{result = (long)n;}
-void FnRgb(int n, const variant_t v[], variant_t& result)		{result = (long)RGB(v[0],v[1],v[2]);}
-template<int cond>
-void FnFind(int n, const variant_t args[], variant_t& result)	{
-	if(!n)	{result.Clear(); return;}
-	int idx = 0;
-	for(int i=1;i<n;i++)	{
-		if(VarCmp(&const_cast<variant_t&>(args[i]), &const_cast<variant_t&>(args[idx]), LOCALE_USER_DEFAULT, 0) == cond)	idx = i;
-	}
-	result = args[idx];
-};
-*/
 // Context
 struct copy_var {
 	const context	*_from;
@@ -570,9 +264,15 @@ context::vars_t	context::_globals {
 	{ "false",	{0} },
 
 	//{ "sin",		make_fun(1, [](int argc, value_t argv[] ) { return to_ }) },
-	{ "size",		make_fn(-1, [](int argc, value_t argv[]){ return argc; }) },
-	{ "add",		make_fn(2, [](int argc, value_t argv[])	{ auto a = to_array(argv[0]); return a->items().push_back(argv[1]), a; }) },
-	{ "remove",		make_fn(2, [](int argc, value_t argv[]) { auto a = to_array(argv[0]); return a->items().erase( a->items().begin() + to_int(argv[1])), a; }) },
+	// String
+	{ "upper",	make_fn(1, [](int, value_t argv[]) { auto s = to_string(argv[0]); return std::transform(s.begin(), s.end(), s.begin(), ::toupper), s; }) },
+	{ "lower",	make_fn(1, [](int, value_t argv[]) { auto s = to_string(argv[0]); return std::transform(s.begin(), s.end(), s.begin(), ::tolower), s; }) },
+	{ "hex",	make_fn(1, [](int, value_t argv[]) { std::stringstream str; str << std::hex << to_int(argv[0]); return str.str(); }) },
+
+	// Array
+	{ "size",	make_fn(-1, [](int argc, value_t argv[]){ return argc; }) },
+	{ "add",	make_fn(2, [](int, value_t argv[])	{ auto a = to_array(argv[0]); return a->items().push_back(argv[1]), a; }) },
+	{ "remove",	make_fn(2, [](int, value_t argv[]) { auto a = to_array(argv[0]); return a->items().erase( a->items().begin() + to_int(argv[1])), a; }) },
 
 
 
@@ -665,36 +365,20 @@ std::optional<value_t> context::get(string_t name) const
 	return {};
 }
 
-// Operator precedence
-/*	{{Parser::stmt,		&OpNull},	{Parser::end, NULL}},
-	{{Parser::comma,	&OpNull},	{Parser::end, NULL}},
-	{{Parser::assign,	&OpAssign},	{Parser::plusset, &OpXSet<OpAdd>}, {Parser::minusset, &OpXSet<OpSub>}, {Parser::mulset, &OpXSet<OpMul>}, {Parser::divset, &OpXSet<OpDiv>}, {Parser::idivset, &OpXSet<OpIDiv>}, { Parser::colon, &OpJoin }, {Parser::end, NULL}},
-	{{Parser::ifop,		&OpNull},	{Parser::end, NULL}},
-	{{Parser::land,		&OpLAnd},	{Parser::lor,	&OpLOr},	{Parser::end, NULL}},
-	{{Parser::and,		&OpAnd},	{Parser::or,	&OpOr},		{Parser::end, NULL}},
-	{{Parser::equ,		&OpEqu},	{Parser::nequ,	&OpNeq},	{Parser::end, NULL}},
-	{{Parser::gt,		&OpGT},		{Parser::ge,	&OpGE},		{Parser::lt, &OpLT},	{Parser::le, &OpLE},	{Parser::end, NULL}},
-	{{Parser::plus,		&OpAdd},	{Parser::minus,	&OpSub},	{Parser::end, NULL}},
-	{{Parser::multiply,	&OpMul},	{Parser::divide,&OpDiv},	{Parser::idiv, &OpIDiv},{Parser::mod, &OpMod},	{Parser::end, NULL}},
-	{{Parser::pwr,		&OpPow},	{Parser::mdot,	&OpDot},	{Parser::end, NULL}},
-	{{Parser::unaryplus,&OpPPX},	{Parser::unaryminus,&OpMMX},{Parser::newobj,&OpNew},{Parser::not,	&OpNot},{Parser::lnot, &OpLNot},{Parser::minus, &OpNeg},{ Parser::apo, &OpHead }, {Parser::end, NULL}},
-	{{Parser::unaryplus,&OpXPP},	{Parser::unaryminus,&OpXMM},{Parser::lpar, &OpCall},{Parser::dot, &OpItem}, {Parser::lsquare, &OpIndex},{ Parser::apo, &OpTail},{Parser::end, NULL}},
-};*/
-
 static auto s_operators = std::make_tuple(
 	std::tuple<op_statmt>(),
 	std::tuple<>(),
-	std::tuple<op_assign>(),
-	std::tuple<>(),
-	std::tuple<>(),
-	std::tuple<>(),
-	std::tuple<>(),
-	std::tuple<>(),
+	std::tuple<op_assign, op_addset, op_subset, op_mulset, op_divset>(),
+	std::tuple<op_if>(),
+	std::tuple<op_land, op_lor>(),
+	std::tuple<op_and, op_or>(),
+	std::tuple<op_eq, op_ne>(),
+	std::tuple<op_gt, op_ge, op_lt, op_le>(),
 
 	std::tuple<op_add, op_sub>(),
-	std::tuple<op_mul, op_div>(),
+	std::tuple<op_mul, op_div, op_mod>(),
 	std::tuple<op_pow>(),
-	std::tuple<op_ppx, op_mmx, op_neg>(),
+	std::tuple<op_ppx, op_mmx, op_neg, op_not, op_lnot>(),
 	std::tuple<op_xpp, op_xmm, op_call, op_index>()
 );
 
@@ -713,17 +397,17 @@ value_t NScript::eval(std::string_view script, std::error_code& ec)
 	_context.pop();
 	return result;
 }
-/*
+
 // Parse "if <cond> <true-part> [else <part>]" statement
-void NScript::ParseIf(Precedence level, variant_t& result, bool skip)	{
-	bool cond = skip || (bool)result;
-	Parse(level, result, !cond || skip);
-	if(_parser.GetToken() == Parser::ifelse || _parser.GetToken() == Parser::colon)	{
-		_parser.Next();
-		Parse(level, result, cond || skip);
+template<NScript::Precedence level> void NScript::parse_if(value_t& result, bool skip)	{
+	bool cond = skip || to_int(result);
+	parse<level>(result, !cond || skip);
+	if(_parser.get_token() == parser::ifelse || _parser.get_token() == parser::colon)	{
+		_parser.next();
+		parse<level>(result, cond || skip);
 	}
 }
-
+/*
 // Parse "for([<start>];<cond>;[<inc>])	<body>" statement
 void NScript::ParseForLoop(variant_t& result, bool skip)	{
 	Parser::State condition, increment, body;
@@ -819,7 +503,7 @@ template <NScript::Precedence level, class OP> bool NScript::apply_op(OP op, val
 	if(op.token == _parser.get_token()) {
 		if(op.token != parser::lpar && op.token != parser::lsquare && op.token != parser::dot)	_parser.next();
 		if(op.token == parser::ifop) {		// ternary "a?b:c" operator
-										//ParseIf(Logical, result, skip);
+			parse_if<Logical>(result, skip);
 			return true;
 		}
 
@@ -891,8 +575,8 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 		else		result = _context.get(_parser.get_name(), local);
 		_parser.next();
 		break;
-/*		case Parser::iffunc:	_parser.Next();Parse(Assignment, result, skip);ParseIf(Assignment, result, skip);break;
-		case Parser::forloop:	ParseForLoop(result, skip);break;
+	case parser::iffunc:	_parser.next(); parse<Assignment>(result, skip); parse_if<Assignment>(result, skip); break;
+/*		case Parser::forloop:	ParseForLoop(result, skip);break;
 		case Parser::idiv:		ParseFunc(result, skip); break;
 		case Parser::func:		ParseFunc(result, skip);break;
 		case Parser::object:	ParseObj(result, skip);break;*/
