@@ -103,6 +103,26 @@ double to_double(value_t v)
 	return std::visit(to_double_t(), v);
 }
 
+date_t to_date(value_t v)
+{
+	struct to_date_t {
+		date_t operator() (std::monostate) { throw nscript_error::type_mismatch; }
+		date_t operator() (int) { throw nscript_error::type_mismatch; }
+		date_t operator() (double) { throw nscript_error::type_mismatch; }
+		date_t operator() (string) { throw nscript_error::type_mismatch; }
+		date_t operator() (date_t dt) { return dt; }
+		date_t operator() (object_ptr) { throw nscript_error::type_mismatch; }
+	};
+	return std::visit(to_date_t(), v);
+}
+
+tm date2tm(date_t date)
+{
+	auto t = std::chrono::system_clock::to_time_t(date);
+	tm tm;
+	localtime_s(&tm, &t);
+	return tm;
+}
 
 // Globals
 /*
@@ -260,68 +280,73 @@ struct copy_var {
 
 context::vars_t	context::_globals {
 	{ "empty",	value_t()},
-	{ "true",	{-1} },
-	{ "false",	{0} },
-
-	//{ "sin",		make_fun(1, [](int argc, value_t argv[] ) { return to_ }) },
+	{ "true",	{ -1} },
+	{ "false",	{ 0} },
+	{ "int",	make_fn(1, [](int, value_t argv[]) { return to_int(argv[0]); }) },
+	{ "dbl",	make_fn(1, [](int, value_t argv[]) { return to_double(argv[0]); }) },
+	{ "str",	make_fn(1, [](int, value_t argv[]) { return to_string(argv[0]); }) },
+	{ "date",	make_fn(1, [](int, value_t argv[]) { return to_date(argv[0]); }) },
+	// Date
+	{ "now",	make_fn(0, [](int, value_t argv[]) { return std::chrono::system_clock::now(); }) },
+	{ "day",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_mday; }) },
+	{ "month",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_mon; }) },
+	{ "year",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_year; }) },
+	{ "hour",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_hour; }) },
+	{ "minute",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_min; }) },
+	{ "second",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_sec; }) },
+	{ "dayofweek",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_wday; }) },
+	{ "dayofyear",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_yday; }) },
+	// Math
+	{ "pi",		make_fn(0, [](int, value_t argv[]) { return 3.14159265358979323846; }) },
+	{ "rnd",	make_fn(0, [](int, value_t argv[]) { return (double)rand() / (double)RAND_MAX; }) },
+	{ "sin",	make_fn(1, [](int, value_t argv[]) { return sin(to_double(argv[0])); }) },
+	{ "cos",	make_fn(1, [](int, value_t argv[]) { return cos(to_double(argv[0])); }) },
+	{ "tan",	make_fn(1, [](int, value_t argv[]) { return tan(to_double(argv[0])); }) },
+	{ "atan",	make_fn(1, [](int, value_t argv[]) { return atan(to_double(argv[0])); }) },
+	{ "abs",	make_fn(1, [](int, value_t argv[]) { return fabs(to_double(argv[0])); }) },
+	{ "exp",	make_fn(1, [](int, value_t argv[]) { return exp(to_double(argv[0])); }) },
+	{ "log",	make_fn(1, [](int, value_t argv[]) { return log(to_double(argv[0])); }) },
+	{ "sqr",	make_fn(1, [](int, value_t argv[]) { return sqrt(to_double(argv[0])); }) },
+	{ "sqrt",	make_fn(1, [](int, value_t argv[]) { return sqrt(to_double(argv[0])); }) },
+	{ "atan2",	make_fn(2, [](int, value_t argv[]) { return atan2(to_double(argv[0]), to_double(argv[1])); }) },
+	{ "sgn",	make_fn(1, [](int, value_t argv[]) { double d = to_double(argv[0]); return d < 0 ? -1 : d > 0 ? 1 : 0; }) },
+	{ "fract",	make_fn(1, [](int, value_t argv[]) { return to_double(argv[0]) - to_int(argv[0]); }) },
 	// String
+	{ "chr",	make_fn(1, [](int, value_t argv[]) { return string_t(1, (string_t::value_type)to_int(argv[0]) ); }) },
+	{ "asc",	make_fn(1, [](int, value_t argv[]) { return (int)to_string(argv[0]).c_str()[0]; }) },
+	{ "len",	make_fn(1, [](int, value_t argv[]) { return (int)to_string(argv[0]).size(); }) },
+	{ "left",	make_fn(2, [](int, value_t argv[]) { return to_string(argv[0]).substr(0, to_int(argv[1])); }) },
+	{ "right",	make_fn(2, [](int, value_t argv[]) { auto s = to_string(argv[0]); auto n = to_int(argv[1]); return s.substr(s.size() - n, n); }) },
+	{ "mid",	make_fn(3, [](int, value_t argv[]) { return to_string(argv[0]).substr(to_int(argv[1]), to_int(argv[2])); }) },
 	{ "upper",	make_fn(1, [](int, value_t argv[]) { auto s = to_string(argv[0]); return std::transform(s.begin(), s.end(), s.begin(), ::toupper), s; }) },
 	{ "lower",	make_fn(1, [](int, value_t argv[]) { auto s = to_string(argv[0]); return std::transform(s.begin(), s.end(), s.begin(), ::tolower), s; }) },
+	{ "string",	make_fn(2, [](int, value_t argv[]) { return string_t(to_int(argv[0]), *to_string(argv[1]).c_str()); }) },
+	{ "replace",make_fn(3, [](int, value_t argv[]) { 
+		string_t s(to_string(argv[0])), from(to_string(argv[1])), to(to_string(argv[2]));
+		string_t::size_type p = 0;
+		for(; (p = s.find(from, p)) != string_t::npos; p += to.length())	s.replace(p, from.length(), to, to.length());
+		return s;
+	}) },
+	{ "instr",	make_fn(1, [](int, value_t argv[]) { return (int)to_string(argv[0]).find(to_string(argv[1])); }) },
+	//{ "format",	make_fn(1, [](int, value_t argv[]) { std::stringstream str; str << std::hex << to_int(argv[0]); return str.str(); }) },
 	{ "hex",	make_fn(1, [](int, value_t argv[]) { std::stringstream str; str << std::hex << to_int(argv[0]); return str.str(); }) },
-
 	// Array
 	{ "size",	make_fn(-1, [](int argc, value_t argv[]){ return argc; }) },
-	{ "add",	make_fn(2, [](int, value_t argv[])	{ auto a = to_array(argv[0]); return a->items().push_back(argv[1]), a; }) },
+	{ "add",	make_fn(2, [](int, value_t argv[]) { auto a = to_array(argv[0]); return a->items().push_back(argv[1]), a; }) },
 	{ "remove",	make_fn(2, [](int, value_t argv[]) { auto a = to_array(argv[0]); return a->items().erase( a->items().begin() + to_int(argv[1])), a; }) },
+	{ "min",	make_fn(-1, [](int argc, value_t argv[]) { auto a = to_array(argv[0]); return *std::min_element(a->items().begin(), a->items().end()); }) },
+	{ "max",	make_fn(-1, [](int argc, value_t argv[]) { auto a = to_array(argv[0]); return *std::max_element(a->items().begin(), a->items().end()); }) },
+	{ "fold",	make_fn(1, [](int argc, value_t argv[]) { return 0; }) },
+	{ "map",	make_fn(1, [](int argc, value_t argv[]) { return 0; }) },
+	{ "filter",	make_fn(1, [](int argc, value_t argv[]) { return 0; }) },
+	{ "head",	make_fn(-1, [](int argc, value_t argv[]) { return argc ? argv[0] : value_t{}; }) },
+	{ "tail",	make_fn(-1, [](int argc, value_t argv[]) { 
+		auto a = std::make_shared<narray>();
+		for(int i = 1; i < argc; i++)		a->items().push_back(argv[i]);
+		return a; 
+	}) },
 
-
-
-
-/*	{ TEXT("optional"),	variant_t(DISP_E_PARAMNOTFOUND, VT_ERROR) },
-	// Conversion
-	{ TEXT("int"),		new BuiltinFunction(1, FnCvt<VT_I4, LOCALE_INVARIANT>) },
-	{ TEXT("dbl"),		new BuiltinFunction(1, FnCvt<VT_R8, LOCALE_INVARIANT>) },
-	{ TEXT("str"),		new BuiltinFunction(1, FnCvt<VT_BSTR, LOCALE_USER_DEFAULT>) },
-	{ TEXT("date"),		new BuiltinFunction(1, FnCvt<VT_DATE, LOCALE_USER_DEFAULT>) },
-	// Date
-	{ TEXT("now"),		new BuiltinFunction(0, FnNow) },
-	{ TEXT("day"),		new BuiltinFunction(1, FnDay) },
-	{ TEXT("month"),	new BuiltinFunction(1, FnMonth) },
-	{ TEXT("year"),		new BuiltinFunction(1, FnYear) },
-	{ TEXT("hour"),		new BuiltinFunction(1, FnHour) },
-	{ TEXT("minute"),	new BuiltinFunction(1, FnMinute) },
-	{ TEXT("second"),	new BuiltinFunction(1, FnSecond) },
-	{ TEXT("dayofweek"),new BuiltinFunction(1, FnDayOfWeek) },
-	{ TEXT("dayofyear"),new BuiltinFunction(1, FnDayOfYear) },
-	// Math
-	{ TEXT("pi"),		new BuiltinFunction(0, FnPi) },
-	{ TEXT("rnd"),		new BuiltinFunction(0, FnRnd) },
-	{ TEXT("sin"),		new BuiltinFunction(1, FnX<double,  sin>) },
-	{ TEXT("cos"),		new BuiltinFunction(1, FnX<double,  cos>) },
-	{ TEXT("tan"),		new BuiltinFunction(1, FnX<double,  tan>) },
-	{ TEXT("atan"),		new BuiltinFunction(1, FnX<double, atan>) },
-	{ TEXT("abs"),		new BuiltinFunction(1, FnX<double, fabs>) },
-	{ TEXT("exp"),		new BuiltinFunction(1, FnX<double,  exp>) },
-	{ TEXT("log"),		new BuiltinFunction(1, FnX<double,  log>) },
-	{ TEXT("sqr"),		new BuiltinFunction(1, FnX<double, sqrt>) },
-	{ TEXT("sqrt"),		new BuiltinFunction(1, FnX<double, sqrt>) },
-	{ TEXT("atan2"),	new BuiltinFunction(2, FnAtan2) },
-	{ TEXT("sgn"),		new BuiltinFunction(1, FnSgn) },
-	{ TEXT("fract"),	new BuiltinFunction(1, FnFract) },
-	// String
-	{ TEXT("chr"),		new BuiltinFunction(1, FnChr) },
-	{ TEXT("asc"),		new BuiltinFunction(1, FnAsc) },
-	{ TEXT("len"),		new BuiltinFunction(1, FnLen) },
-	{ TEXT("left"),		new BuiltinFunction(2, FnLeft) },
-	{ TEXT("right"),	new BuiltinFunction(2, FnRight) },
-	{ TEXT("mid"),		new BuiltinFunction(3, FnMid) },
-	{ TEXT("upper"),	new BuiltinFunction(1, FnUpper) },
-	{ TEXT("lower"),	new BuiltinFunction(1, FnLower) },
-	{ TEXT("string"),	new BuiltinFunction(2, FnString) },
-	{ TEXT("replace"),	new BuiltinFunction(3, FnReplace) },
-	{ TEXT("instr"),	new BuiltinFunction(2, FnInstr) },
-	{ TEXT("format"),	new BuiltinFunction(2, FnFormat) },
-	{ TEXT("hex"),		new BuiltinFunction(1, FnHex) },
+/*
 	// Array
 	{ TEXT("add"),		new BuiltinFunction(2, FnAdd) },
 	{ TEXT("remove"),	new BuiltinFunction(2, FnRemove) },

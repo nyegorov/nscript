@@ -1,7 +1,7 @@
 // NScript - lightweight, single-pass parser for executing c-style expressions. 
 // Supports integer, double, string and date types. Has limited set of flow 
 // control statements (if/then/else, loops). Fully extensible by user-defined 
-// objects with IObject interface.
+// objects with i_object interface.
 
 #pragma once
 
@@ -56,6 +56,7 @@ using value_t = std::variant<std::monostate, int, double, string_t, date_t, obje
 std::string to_string(value_t v);
 int to_int(value_t v);
 double to_double(value_t v);
+date_t to_date(value_t v);
 
 // Interface for extension objects
 struct i_object {
@@ -141,15 +142,14 @@ protected:
 	enum Precedence	{Script = 0,Statement,Assignment,Conditional,Logical,Binary,Equality,Relation,Addition,Multiplication,Power,Unary,Functional,Primary,Term};
 
 	template <Precedence L> void parse(value_t& result, bool skip);
-	template <Precedence L, class OP> bool apply_op(OP op, value_t& result, bool skip);
-	//template <unsigned I = 0, typename...Tp> void apply_op(const std::tuple<Tp...>& t, value_t& result, bool skip);
 	template <Precedence L> void parse(parser::state state, value_t& result);
 	template <Precedence L> void parse_if(value_t& result, bool skip);
-	/*void ParseIf(Precedence level, variant_t& result, bool skip);
+	/*
 	void ParseForLoop(variant_t& result, bool skip);
 	void ParseArgList(args_list& args, bool forceArgs);
 	void ParseFunc(variant_t& args, bool skip);
 	void ParseObj(variant_t& result, bool skip);*/
+	template <Precedence L, class OP> bool apply_op(OP op, value_t& result, bool skip);
 
 	parser				_parser;
 	context				_context;
@@ -157,7 +157,7 @@ protected:
 
 };
 
-// Generic implementation of IObject interface
+// Generic implementation of i_object interface
 class object : public i_object	{
 public:
 	object()	{};

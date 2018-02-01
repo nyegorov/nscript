@@ -120,7 +120,7 @@ struct comparator {
 	int operator() (int i1, double d2) { return i1 < d2 ? -1 : i1 > d2 ? 1 : 0; }
 	int operator() (double d1, int i2) { return d1 < i2 ? -1 : d1 > i2 ? 1 : 0; }
 	int operator() (double d1, double d2) { return d1 < d2 ? -1 : d1 > d2 ? 1 : 0; }
-	int operator() (string s1, string s2) { return strcmp(s1.c_str(), s2.c_str()); }
+	int operator() (string s1, string s2) { return s1.compare(s2); }
 	template<class X, class Y> int operator()(X x, Y y) { throw nscript_error::type_mismatch; return 0; }
 };
 
