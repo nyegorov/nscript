@@ -28,6 +28,13 @@ std::error_code make_error_code(nscript_error e)			{ return std::error_code(stat
 std::error_condition make_error_condition(nscript_error e)	{ return std::error_condition(static_cast<int>(e), nscript_category()); }
 
 bool is_empty(const value_t& v) { return v.index() == 0; }
+tm date2tm(date_t date)
+{
+	auto t = std::chrono::system_clock::to_time_t(date);
+	tm tm;
+	localtime_s(&tm, &t);
+	return tm;
+}
 
 class narray;
 narray* to_array_if(const value_t& v)
@@ -47,7 +54,7 @@ std::shared_ptr<narray> to_array(const value_t& v)
 std::string to_string(value_t v)
 {
 	struct print_value {
-		string operator() (std::monostate)	{ return "[empty]"; }
+		string operator() (std::monostate)	{ return ""; }
 		string operator() (int i) { return std::to_string(i); }
 		string operator() (double d) {
 			std::stringstream ss;
@@ -56,15 +63,12 @@ std::string to_string(value_t v)
 		}
 		string operator() (string s) { return s; }
 		string operator() (nscript3::date_t dt) {
-
-			auto t = std::chrono::system_clock::to_time_t(dt);
-			tm tm;
-			localtime_s(&tm, &t);
+			auto tm = date2tm(dt);
 			std::stringstream ss;
-			if(tm.tm_hour || tm.tm_min || tm.tm_sec)
-				ss << std::put_time(&tm, tm.tm_sec ? "%d.%m.%Y %H:%M:%S" : "%d.%m.%Y %H:%M");
-			else
-				ss << std::put_time(&tm, "%d.%m.%Y");
+			bool is_date = !(tm.tm_mday == 1 && tm.tm_mon == 0 && tm.tm_year == 70);
+			bool is_time = tm.tm_hour || tm.tm_min || tm.tm_sec;
+			if(is_date)		ss << std::put_time(&tm, "%d.%m.%Y");
+			if(is_time)		ss << (is_date ? " " : "") << std::put_time(&tm, tm.tm_sec ? "%H:%M:%S" : "%H:%M");
 			return ss.str();
 		}
 		string operator() (nscript3::object_ptr o) { 
@@ -82,7 +86,7 @@ int to_int(value_t v)
 	struct to_int_t {
 		int operator() (std::monostate)	{ return 0; }
 		int operator() (int i)			{ return i; }
-		int operator() (double d)		{ return (int)d; }
+		int operator() (double d)		{ return (int)(d + 0.5); }
 		int operator() (string s)		{ return std::stoi( s ); }
 		int operator() (date_t dt)		{ throw nscript_error::type_mismatch; }
 		int operator() (object_ptr o)	{ throw nscript_error::type_mismatch; }
@@ -103,25 +107,54 @@ double to_double(value_t v)
 	return std::visit(to_double_t(), v);
 }
 
+date_t to_date(const string& s)
+{
+	enum date_stage { day = 0, mon, year, hour, min, sec } stage = day;
+	int date[6] = { 0 };
+	for(auto c : s) {
+		if(isdigit(c)) {
+			date[stage] = date[stage] * 10 + (c - '0');
+		} else if(c == '.') {
+			if(stage > year)					throw nscript_error::syntax_error;
+			stage = date_stage(stage + 1);
+		} else if(c == ':') {
+			if(stage == day)	date[3] = date[0], date[0] = 1, date[1] = 1, date[2] = 1970, stage = hour;
+			if(stage < hour || stage == sec)	throw nscript_error::syntax_error;
+			stage = date_stage(stage + 1);
+		} else if(c == ' ') {
+			if(stage != year && stage != hour)	throw nscript_error::syntax_error;
+			stage = hour;
+		} else	break;
+	};
+	if(date[2] < 100)	date[2] += date[2] < 50 ? 2000 : 1900;
+	if(date[0] <= 0 || date[0] > 31)		throw nscript_error::syntax_error;
+	if(date[1] <= 0 || date[1] > 12)		throw nscript_error::syntax_error;
+	if(date[2] < 1900 || date[2] > 9999)	throw nscript_error::syntax_error;
+	if(date[3] < 0 || date[3] > 23)			throw nscript_error::syntax_error;
+	if(date[4] < 0 || date[4] > 59)			throw nscript_error::syntax_error;
+	if(date[5] < 0 || date[5] > 59)			throw nscript_error::syntax_error;
+	tm tm;
+	tm.tm_mday = date[0];
+	tm.tm_mon = date[1] - 1;
+	tm.tm_year = date[2] - 1900;
+	tm.tm_hour = date[3];
+	tm.tm_min = date[4];
+	tm.tm_sec = date[5];
+	auto time = std::mktime(&tm);
+	return std::chrono::system_clock::from_time_t(time);
+}
+
 date_t to_date(value_t v)
 {
 	struct to_date_t {
 		date_t operator() (std::monostate) { throw nscript_error::type_mismatch; }
 		date_t operator() (int) { throw nscript_error::type_mismatch; }
 		date_t operator() (double) { throw nscript_error::type_mismatch; }
-		date_t operator() (string) { throw nscript_error::type_mismatch; }
+		date_t operator() (string s) { return to_date(s); }
 		date_t operator() (date_t dt) { return dt; }
 		date_t operator() (object_ptr) { throw nscript_error::type_mismatch; }
 	};
 	return std::visit(to_date_t(), v);
-}
-
-tm date2tm(date_t date)
-{
-	auto t = std::chrono::system_clock::to_time_t(date);
-	tm tm;
-	localtime_s(&tm, &t);
-	return tm;
 }
 
 // Globals
@@ -214,6 +247,7 @@ class narray : public object, public std::enable_shared_from_this<narray> {
 	std::vector<value_t>	_items;
 public:
 	narray() {}
+	template<class InputIt> narray(InputIt first, InputIt last) : _items(first, last) {}
 	narray(value_t val) : _items { val } {}
 	value_t get() {
 		if(_items.size() == 1) return _items.front(); 
@@ -259,10 +293,11 @@ public:
 	value_t call(value_t params) {
 		if(auto pa = to_array_if(params); pa) {
 			if(_count >= 0 && _count != pa->items().size())	throw nscript_error::bad_param_count;
-			return _func(pa->items().size(), pa->items().data());
-		}
-		if(_count >= 0 && _count != 1)	throw nscript_error::bad_param_count;
-		return _func(1, &params);
+			return _func(pa->items());
+		} 
+		else if(is_empty(params) && _count <= 0)	return _func({});
+		else if(_count < 0 || _count == 1)			return _func({ params });
+		else										throw nscript_error::bad_param_count;	
 	}
 protected:
 	const int			_count;
@@ -282,69 +317,65 @@ context::vars_t	context::_globals {
 	{ "empty",	value_t()},
 	{ "true",	{ -1} },
 	{ "false",	{ 0} },
-	{ "int",	make_fn(1, [](int, value_t argv[]) { return to_int(argv[0]); }) },
-	{ "dbl",	make_fn(1, [](int, value_t argv[]) { return to_double(argv[0]); }) },
-	{ "str",	make_fn(1, [](int, value_t argv[]) { return to_string(argv[0]); }) },
-	{ "date",	make_fn(1, [](int, value_t argv[]) { return to_date(argv[0]); }) },
+	{ "int",	make_fn(1, [](const params_t& args) { return to_int(args.front()); }) },
+	{ "dbl",	make_fn(1, [](const params_t& args) { return to_double(args.front()); }) },
+	{ "str",	make_fn(1, [](const params_t& args) { return to_string(args.front()); }) },
+	{ "date",	make_fn(1, [](const params_t& args) { return to_date(args.front()); }) },
 	// Date
-	{ "now",	make_fn(0, [](int, value_t argv[]) { return std::chrono::system_clock::now(); }) },
-	{ "day",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_mday; }) },
-	{ "month",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_mon; }) },
-	{ "year",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_year; }) },
-	{ "hour",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_hour; }) },
-	{ "minute",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_min; }) },
-	{ "second",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_sec; }) },
-	{ "dayofweek",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_wday; }) },
-	{ "dayofyear",	make_fn(1, [](int, value_t argv[]) { return date2tm(to_date(argv[0])).tm_yday; }) },
+	{ "now",	make_fn(0, [](const params_t& args) { return std::chrono::system_clock::now(); }) },
+	{ "day",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_mday; }) },
+	{ "month",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_mon + 1; }) },
+	{ "year",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_year + 1900; }) },
+	{ "hour",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_hour; }) },
+	{ "minute",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_min; }) },
+	{ "second",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_sec; }) },
+	{ "dayofweek",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_wday; }) },
+	{ "dayofyear",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_yday + 1; }) },
 	// Math
-	{ "pi",		make_fn(0, [](int, value_t argv[]) { return 3.14159265358979323846; }) },
-	{ "rnd",	make_fn(0, [](int, value_t argv[]) { return (double)rand() / (double)RAND_MAX; }) },
-	{ "sin",	make_fn(1, [](int, value_t argv[]) { return sin(to_double(argv[0])); }) },
-	{ "cos",	make_fn(1, [](int, value_t argv[]) { return cos(to_double(argv[0])); }) },
-	{ "tan",	make_fn(1, [](int, value_t argv[]) { return tan(to_double(argv[0])); }) },
-	{ "atan",	make_fn(1, [](int, value_t argv[]) { return atan(to_double(argv[0])); }) },
-	{ "abs",	make_fn(1, [](int, value_t argv[]) { return fabs(to_double(argv[0])); }) },
-	{ "exp",	make_fn(1, [](int, value_t argv[]) { return exp(to_double(argv[0])); }) },
-	{ "log",	make_fn(1, [](int, value_t argv[]) { return log(to_double(argv[0])); }) },
-	{ "sqr",	make_fn(1, [](int, value_t argv[]) { return sqrt(to_double(argv[0])); }) },
-	{ "sqrt",	make_fn(1, [](int, value_t argv[]) { return sqrt(to_double(argv[0])); }) },
-	{ "atan2",	make_fn(2, [](int, value_t argv[]) { return atan2(to_double(argv[0]), to_double(argv[1])); }) },
-	{ "sgn",	make_fn(1, [](int, value_t argv[]) { double d = to_double(argv[0]); return d < 0 ? -1 : d > 0 ? 1 : 0; }) },
-	{ "fract",	make_fn(1, [](int, value_t argv[]) { return to_double(argv[0]) - to_int(argv[0]); }) },
+	{ "pi",		make_fn(0, [](const params_t& args) { return 3.14159265358979323846; }) },
+	{ "rnd",	make_fn(0, [](const params_t& args) { return (double)rand() / (double)RAND_MAX; }) },
+	{ "sin",	make_fn(1, [](const params_t& args) { return sin(to_double(args.front())); }) },
+	{ "cos",	make_fn(1, [](const params_t& args) { return cos(to_double(args.front())); }) },
+	{ "tan",	make_fn(1, [](const params_t& args) { return tan(to_double(args.front())); }) },
+	{ "atan",	make_fn(1, [](const params_t& args) { return atan(to_double(args.front())); }) },
+	{ "abs",	make_fn(1, [](const params_t& args) { return fabs(to_double(args.front())); }) },
+	{ "exp",	make_fn(1, [](const params_t& args) { return exp(to_double(args.front())); }) },
+	{ "log",	make_fn(1, [](const params_t& args) { return log(to_double(args.front())); }) },
+	{ "sqr",	make_fn(1, [](const params_t& args) { return sqrt(to_double(args.front())); }) },
+	{ "sqrt",	make_fn(1, [](const params_t& args) { return sqrt(to_double(args.front())); }) },
+	{ "atan2",	make_fn(2, [](const params_t& args) { return atan2(to_double(args[0]), to_double(args[1])); }) },
+	{ "sgn",	make_fn(1, [](const params_t& args) { double d = to_double(args.front()); return d < 0 ? -1 : d > 0 ? 1 : 0; }) },
+	{ "fract",	make_fn(1, [](const params_t& args) { return to_double(args.front()) - to_int(args.front()); }) },
 	// String
-	{ "chr",	make_fn(1, [](int, value_t argv[]) { return string_t(1, (string_t::value_type)to_int(argv[0]) ); }) },
-	{ "asc",	make_fn(1, [](int, value_t argv[]) { return (int)to_string(argv[0]).c_str()[0]; }) },
-	{ "len",	make_fn(1, [](int, value_t argv[]) { return (int)to_string(argv[0]).size(); }) },
-	{ "left",	make_fn(2, [](int, value_t argv[]) { return to_string(argv[0]).substr(0, to_int(argv[1])); }) },
-	{ "right",	make_fn(2, [](int, value_t argv[]) { auto s = to_string(argv[0]); auto n = to_int(argv[1]); return s.substr(s.size() - n, n); }) },
-	{ "mid",	make_fn(3, [](int, value_t argv[]) { return to_string(argv[0]).substr(to_int(argv[1]), to_int(argv[2])); }) },
-	{ "upper",	make_fn(1, [](int, value_t argv[]) { auto s = to_string(argv[0]); return std::transform(s.begin(), s.end(), s.begin(), ::toupper), s; }) },
-	{ "lower",	make_fn(1, [](int, value_t argv[]) { auto s = to_string(argv[0]); return std::transform(s.begin(), s.end(), s.begin(), ::tolower), s; }) },
-	{ "string",	make_fn(2, [](int, value_t argv[]) { return string_t(to_int(argv[0]), *to_string(argv[1]).c_str()); }) },
-	{ "replace",make_fn(3, [](int, value_t argv[]) { 
-		string_t s(to_string(argv[0])), from(to_string(argv[1])), to(to_string(argv[2]));
-		string_t::size_type p = 0;
-		for(; (p = s.find(from, p)) != string_t::npos; p += to.length())	s.replace(p, from.length(), to, to.length());
+	{ "chr",	make_fn(1, [](const params_t& args) { return string_t(1, (string_t::value_type)to_int(args.front()) ); }) },
+	{ "asc",	make_fn(1, [](const params_t& args) { return (int)to_string(args.front()).c_str()[0]; }) },
+	{ "len",	make_fn(1, [](const params_t& args) { return (int)to_string(args.front()).size(); }) },
+	{ "left",	make_fn(2, [](const params_t& args) { return to_string(args[0]).substr(0, to_int(args[1])); }) },
+	{ "right",	make_fn(2, [](const params_t& args) { auto s = to_string(args[0]); auto n = to_int(args[1]); return s.substr(s.size() - n, n); }) },
+	{ "mid",	make_fn(3, [](const params_t& args) { return to_string(args[0]).substr(to_int(args[1]), to_int(args[2])); }) },
+	{ "upper",	make_fn(1, [](const params_t& args) { auto s = to_string(args[0]); return std::transform(s.begin(), s.end(), s.begin(), ::toupper), s; }) },
+	{ "lower",	make_fn(1, [](const params_t& args) { auto s = to_string(args[0]); return std::transform(s.begin(), s.end(), s.begin(), ::tolower), s; }) },
+	{ "string",	make_fn(2, [](const params_t& args) { return string_t(to_int(args[0]), *to_string(args[1]).c_str()); }) },
+	{ "replace",make_fn(3, [](const params_t& args) { 
+		string_t s(to_string(args[0])), from(to_string(args[1])), to(to_string(args[2]));
+		for(string_t::size_type p = 0; (p = s.find(from, p)) != string_t::npos; p += to.size())	s.replace(p, from.size(), to);
 		return s;
 	}) },
-	{ "instr",	make_fn(1, [](int, value_t argv[]) { return (int)to_string(argv[0]).find(to_string(argv[1])); }) },
-	//{ "format",	make_fn(1, [](int, value_t argv[]) { std::stringstream str; str << std::hex << to_int(argv[0]); return str.str(); }) },
-	{ "hex",	make_fn(1, [](int, value_t argv[]) { std::stringstream str; str << std::hex << to_int(argv[0]); return str.str(); }) },
+	{ "instr",	make_fn(2, [](const params_t& args) { return (int)to_string(args[0]).find(to_string(args[1])); }) },
+	//{ "format",	make_fn(1, [](const params_t& args) { std::stringstream str; str << std::hex << to_int(argv[0]); return str.str(); }) },
+	{ "hex",	make_fn(1, [](const params_t& args) { std::stringstream str; str << std::hex << to_int(args.front()); return str.str(); }) },
+	{ "rgb",	make_fn(3, [](const params_t& args) { return to_int(args[2]) * 65536 + to_int(args[1]) * 256 + to_int(args[0]); }) },
 	// Array
-	{ "size",	make_fn(-1, [](int argc, value_t argv[]){ return argc; }) },
-	{ "add",	make_fn(2, [](int, value_t argv[]) { auto a = to_array(argv[0]); return a->items().push_back(argv[1]), a; }) },
-	{ "remove",	make_fn(2, [](int, value_t argv[]) { auto a = to_array(argv[0]); return a->items().erase( a->items().begin() + to_int(argv[1])), a; }) },
-	{ "min",	make_fn(-1, [](int argc, value_t argv[]) { auto a = to_array(argv[0]); return *std::min_element(a->items().begin(), a->items().end()); }) },
-	{ "max",	make_fn(-1, [](int argc, value_t argv[]) { auto a = to_array(argv[0]); return *std::max_element(a->items().begin(), a->items().end()); }) },
-	{ "fold",	make_fn(1, [](int argc, value_t argv[]) { return 0; }) },
-	{ "map",	make_fn(1, [](int argc, value_t argv[]) { return 0; }) },
-	{ "filter",	make_fn(1, [](int argc, value_t argv[]) { return 0; }) },
-	{ "head",	make_fn(-1, [](int argc, value_t argv[]) { return argc ? argv[0] : value_t{}; }) },
-	{ "tail",	make_fn(-1, [](int argc, value_t argv[]) { 
-		auto a = std::make_shared<narray>();
-		for(int i = 1; i < argc; i++)		a->items().push_back(argv[i]);
-		return a; 
-	}) },
+	{ "size",	make_fn(-1, [](const params_t& args){ return (int)args.size(); }) },
+	{ "add",	make_fn(2, [](const params_t& args) { auto a = to_array(args[0]); return a->items().push_back(args[1]), a; }) },
+	{ "remove",	make_fn(2, [](const params_t& args) { auto a = to_array(args[0]); return a->items().erase( a->items().begin() + to_int(args[1])), a; }) },
+	{ "min",	make_fn(-1, [](const params_t& args) { auto pe = std::min_element(begin(args), end(args), std::less<nscript3::value_t>()); return pe == end(args) ? value_t{} : *pe; }) },
+	{ "max",	make_fn(-1, [](const params_t& args) { auto pe = std::max_element(begin(args), end(args), std::less<nscript3::value_t>()); return pe == end(args) ? value_t{} : *pe; }) },
+	{ "fold",	make_fn(1, [](const params_t& args) { return 0; }) },
+	{ "map",	make_fn(1, [](const params_t& args) { return 0; }) },
+	{ "filter",	make_fn(1, [](const params_t& args) { return 0; }) },
+	{ "head",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : args.front(); }) },
+	{ "tail",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : std::make_shared<narray>(args.begin() + 1, args.end()); }) },
 
 /*
 	// Array
@@ -668,7 +699,7 @@ parser::token parser::next()
 		case '}':	_token = rcurly;break;
 		case '[':	_token = lsquare;break;
 		case ']':	_token = rsquare;break;
-		case '#':	_token = value; read_date(c); break;
+		case '#':	_token = value; read_string(c); _value = to_date(_value); break;
 		case '`':	_token = apo; break;
 		case 0xB7:	_token = mdot; break;
 		case '\"':

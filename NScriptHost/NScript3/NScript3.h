@@ -52,6 +52,7 @@ using string_t = std::string;
 using date_t = std::chrono::system_clock::time_point;
 using object_ptr = std::shared_ptr<i_object>;
 using value_t = std::variant<std::monostate, int, double, string_t, date_t, object_ptr>;
+using params_t = std::vector<value_t>;
 
 std::string to_string(value_t v);
 int to_int(value_t v);

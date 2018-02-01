@@ -236,6 +236,11 @@ struct op_index : op_base {
 struct op_statmt : op_base	{
 	const parser::token token = parser::token::stmt;
 	template<class X, class Y> value_t operator()(X, Y y) { return { y }; }
-};;
+};
 
 }
+
+template<> struct std::less<nscript3::value_t> {
+	bool operator()(const nscript3::value_t &v1, const nscript3::value_t& v2) { return std::visit(nscript3::comparator(), v1, v2) < 0; }
+};
+
