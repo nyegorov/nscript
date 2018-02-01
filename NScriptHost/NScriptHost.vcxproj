@@ -176,6 +176,7 @@
     <ClInclude Include="ComLite\ComLite.h" />
     <ClInclude Include="ComLite\Dispatch.h" />
     <ClInclude Include="ComLite\RegKey.h" />
+    <ClInclude Include="NScript3\nobjects.h" />
     <ClInclude Include="nscript3\noperators.h" />
     <ClInclude Include="NScript3\nscript3.h" />
     <ClInclude Include="NScript\NDispatch.h" />

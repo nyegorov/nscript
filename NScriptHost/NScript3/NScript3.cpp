@@ -12,6 +12,7 @@
 #include <assert.h>
 #include "nscript3.h"
 #include "noperators.h"
+#include "nobjects.h"
 
 #undef min
 #undef max
@@ -48,7 +49,8 @@ std::shared_ptr<narray> to_array(const value_t& v)
 {
 	if(auto pobj = std::get_if<object_ptr>(&v); pobj)
 		if(auto parr = std::dynamic_pointer_cast<narray>(*pobj); parr)	return parr;
-	return is_empty(v) ? std::make_shared<narray>() : std::make_shared<narray>(v);
+	return is_empty(v) ? std::make_shared<narray>() 
+					   : std::make_shared<narray>(v);
 }
 
 std::string to_string(value_t v)
@@ -223,88 +225,6 @@ value_t& operator *(value_t& v)	{
 	return v;
 }
 
-// Class that represents script variables
-class variable : public object, public std::enable_shared_from_this<variable> {
-	value_t			_value;
-public:
-	variable() : _value() {}
-	value_t get() { return _value; }
-	void set(value_t value) { _value = value; }
-	value_t create() const { return std::get<object_ptr>(_value)->create(); }
-	value_t call(value_t params) { return std::get<object_ptr>(_value)->call(params); }
-	value_t item(value_t item) { return std::get<object_ptr>(_value)->item(item); }
-	value_t index(value_t index) { 
-		if(auto pobj = std::get_if<object_ptr>(&_value); pobj)	return (*pobj)->index(index);
-		if(index == value_t{ 0 })	return { shared_from_this() };
-		throw std::errc::invalid_argument;
-	}
-	string_t print() const { return std::get<object_ptr>(_value)->print(); }
-};
-
-
-// Class that represents arrays
-class narray : public object, public std::enable_shared_from_this<narray> {
-	std::vector<value_t>	_items;
-public:
-	narray() {}
-	template<class InputIt> narray(InputIt first, InputIt last) : _items(first, last) {}
-	narray(value_t val) : _items { val } {}
-	value_t get() {
-		if(_items.size() == 1) return _items.front(); 
-		return { std::static_pointer_cast<i_object>(shared_from_this()) };
-	}
-	value_t index(value_t index) {
-		if(auto pi = std::get_if<int>(&index))	return std::make_shared<indexer>(shared_from_this(), *pi);
-		throw std::errc::invalid_argument;
-	}
-	string_t print() const { 
-		std::stringstream ss;
-		ss << '[';
-		std::stringstream::pos_type pos = 0;
-		for(auto& v : _items) { 
-			if(ss.tellp() > 1) ss << "; "; 
-			ss << to_string(v);
-		}
-		ss << ']';
-		return ss.str();
-	}
-	void push_back(const value_t& val)	{ _items.push_back(val); }
-	void push_back(value_t&& val)		{ _items.push_back(std::forward<value_t>(val)); }
-	std::vector<value_t>& items()		{ return _items; }
-
-protected:
-	class indexer : public object {
-		std::shared_ptr<narray>	_data;
-		int						_index;
-	public:
-		indexer(std::shared_ptr<narray> arr, int index) : _index(index), _data(arr) {};
-		value_t get()			{ return _data->items()[_index]; }
-		void set(value_t value) { _data->items()[_index] = value; }
-		value_t call(value_t params)	{ return std::visit(op_call(), _data->items()[_index], params); }
-		//value_t item(value_t item)		{ return std::visit(op_item(), _data->items()[_index], item); }
-		value_t index(value_t index)	{ return std::visit(op_index(), _data->items()[_index], index); }
-	};
-};
-
-// Built-in functions
-template<class FN> class builtin_function : public object {
-public:
-	builtin_function(int count, FN func) : _count(count), _func(func) {}
-	value_t call(value_t params) {
-		if(auto pa = to_array_if(params); pa) {
-			if(_count >= 0 && _count != pa->items().size())	throw nscript_error::bad_param_count;
-			return _func(pa->items());
-		} 
-		else if(is_empty(params) && _count <= 0)	return _func({});
-		else if(_count < 0 || _count == 1)			return _func({ params });
-		else										throw nscript_error::bad_param_count;	
-	}
-protected:
-	const int			_count;
-	FN					_func;
-};
-template<class FN> object_ptr make_fn(int count, FN fn) { return std::make_shared<builtin_function<FN>>(count, fn); }
-
 // Context
 struct copy_var {
 	const context	*_from;
@@ -376,21 +296,6 @@ context::vars_t	context::_globals {
 	{ "filter",	make_fn(1, [](const params_t& args) { return 0; }) },
 	{ "head",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : args.front(); }) },
 	{ "tail",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : std::make_shared<narray>(args.begin() + 1, args.end()); }) },
-
-/*
-	// Array
-	{ TEXT("add"),		new BuiltinFunction(2, FnAdd) },
-	{ TEXT("remove"),	new BuiltinFunction(2, FnRemove) },
-	{ TEXT("fold"),		new BuiltinFunction(1, FnFold) },
-	{ TEXT("fmap"),		new BuiltinFunction(1, FnMap) },
-	{ TEXT("filter"),	new BuiltinFunction(1, FnFilter) },
-	{ TEXT("head"),		new BuiltinFunction(-1, FnHead) },
-	{ TEXT("tail"),		new BuiltinFunction(-1, FnTail) },
-	// Other
-	{ TEXT("size"),		new BuiltinFunction(-1, FnSize) },
-	{ TEXT("rgb"),		new BuiltinFunction(3,  FnRgb) },
-	{ TEXT("min"),		new BuiltinFunction(-1, FnFind<VARCMP_LT>) },
-	{ TEXT("max"),		new BuiltinFunction(-1, FnFind<VARCMP_GT>) },*/
 };
 
 context::context(const context *base, const var_names *vars) : _locals(1)
@@ -545,6 +450,34 @@ void NScript::ParseObj(variant_t& result, bool skip)
 	if(_parser.GetToken() == Parser::rcurly)	_parser.Next();
 }*/
 
+// Parse comma-separated arguments list
+void NScript::parse_args_list(args_list& args, bool force_args) {
+	auto token = _parser.next();
+	if(token != parser::lpar && !force_args) return;		// function without parameters
+	if(token == parser::lpar)	_parser.next();
+
+	while(_parser.get_token() == parser::name) {
+		args.push_back(_parser.get_name());
+		if(_parser.next() != parser::comma) break;
+		_parser.next();
+	};
+	if(args.size() == 1 && args.front() == "@")	args.clear();
+
+	if(_parser.get_token() == parser::rpar)	_parser.next();
+}
+
+void NScript::parse_func(value_t& result, bool skip)
+{
+	args_list args;
+	parse_args_list(args, _parser.get_token() == parser::idiv);
+	parser::state state = _parser.get_state();
+	if(_parser.get_token() == parser::end)	throw nscript_error::syntax_error;
+	// _varnames contains list of variables to be captured by function
+	if(!skip)	_varnames.clear();
+	parse<Assignment>(result, true);
+	if(!skip)	result = std::make_shared<user_function>(args, _parser.get_content(state, _parser.get_state()), &context(&_context, &_varnames));
+}
+
 // Jump to position <state>, parse expression and return back
 template <NScript::Precedence level> void NScript::parse(parser::state state, value_t& result)
 {
@@ -610,7 +543,7 @@ template<> void NScript::parse<NScript::Statement>(value_t& result, bool skip)
 			value_t v;
 			_parser.next();
 			parse<Assignment>(v, skip);
-			a->push_back(*v);
+			a->items().push_back(*v);
 		} while(_parser.get_token() == parser::comma);
 		result = a;
 	}
@@ -632,10 +565,10 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 		_parser.next();
 		break;
 	case parser::iffunc:	_parser.next(); parse<Assignment>(result, skip); parse_if<Assignment>(result, skip); break;
-/*		case Parser::forloop:	ParseForLoop(result, skip);break;
-		case Parser::idiv:		ParseFunc(result, skip); break;
-		case Parser::func:		ParseFunc(result, skip);break;
-		case Parser::object:	ParseObj(result, skip);break;*/
+	case parser::idiv:		parse_func(result, skip); break;
+	case parser::func:		parse_func(result, skip); break;
+			/*		case Parser::forloop:	ParseForLoop(result, skip);break;
+			case Parser::object:	ParseObj(result, skip);break;*/
 	case parser::lpar:
 	case parser::lsquare:
 		_parser.next();

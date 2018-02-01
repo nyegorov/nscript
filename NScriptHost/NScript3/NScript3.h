@@ -58,6 +58,9 @@ std::string to_string(value_t v);
 int to_int(value_t v);
 double to_double(value_t v);
 date_t to_date(value_t v);
+class narray;
+narray* to_array_if(const value_t& v);
+std::shared_ptr<narray> to_array(const value_t& v);
 
 // Interface for extension objects
 struct i_object {
@@ -97,13 +100,13 @@ public:
 	enum token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon,apo,mdot};
 
 	parser();
-	void init(string_view expr)	{_content = expr; set_state(0);}
+	void init(string_view expr)	{if(!expr.empty()) _content = expr; set_state(0);}
 	token get_token()			{return _token;}
 	value_t get_value()			{return _value;}
 	string_t get_name()			{return _name;}
 	state get_state() const		{return _lastpos;}
 	void set_state(state state)	{_pos = state; _token=end; next();}
-//	tstring GetContent(State begin, State end)	{return _content.substr(begin, end-begin);}
+	string_t get_content(state begin, state end)	{return _content.substr(begin, end-begin);}
 	void check_pair(token token);
 	token next();
 private:
@@ -130,9 +133,9 @@ private:
 class NScript
 {
 public:
-	//NScript(const tchar* script = NULL, const Context *pcontext = NULL) : _context(pcontext)	{_parser.Init(script);}
+	NScript(string_view script, const context *pcontext = NULL) : _context(pcontext)	{_parser.init(script);}
 	NScript() : _context(nullptr)	{}
-	~NScript(void)						{};
+	~NScript(void)					{};
 	value_t eval(string_view script) { std::error_code ec; return eval(script, ec); };
 	value_t eval(string_view script, std::error_code& ec);
 	void add(string_t name, value_t object)	{ _context.set(name, object); }
@@ -145,6 +148,8 @@ protected:
 	template <Precedence L> void parse(value_t& result, bool skip);
 	template <Precedence L> void parse(parser::state state, value_t& result);
 	template <Precedence L> void parse_if(value_t& result, bool skip);
+	void parse_args_list(args_list& args, bool force_args);
+	void parse_func(value_t& result, bool skip);
 	/*
 	void ParseForLoop(variant_t& result, bool skip);
 	void ParseArgList(args_list& args, bool forceArgs);
@@ -169,7 +174,7 @@ public:
 	value_t item(value_t item)			{ throw std::errc::not_supported; }
 	value_t index(value_t index)		{ throw std::errc::not_supported; }
 	string_t print() const				{ throw std::errc::not_supported; }
-	virtual ~object()	{};
+	virtual ~object()					{};
 };
 
 /*// User-defined functions

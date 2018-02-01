@@ -53,6 +53,9 @@
     <ClInclude Include="nscript3\noperators.h">
       <Filter>NScript3</Filter>
     </ClInclude>
+    <ClInclude Include="NScript3\nobjects.h">
+      <Filter>NScript3</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
