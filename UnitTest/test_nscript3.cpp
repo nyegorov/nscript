@@ -76,7 +76,7 @@ public:
 		Assert::AreEqual("1", eval("x=2; test = sub {x=1;}; test(); x").c_str());
 		Assert::AreEqual("2", eval("x=2; test = sub {my x; x=1;}; test(); x").c_str());
 		Assert::AreEqual("ok", eval("\
-				intr := sub(f,a,b,dx) {for(my s=0, my x=a;x<b;x+=dx) s+=f(x)*dx; s}; \
+				intr = sub(f,a,b,dx) {for(my s=0, my x=a;x<b;x+=dx) s+=f(x)*dx; s}; \
 				if(intr(sub(x) x^2, 0, 2, 0.01)-2^3/3 < 0.01) 'ok' else 'fail'").c_str());
 	}
 	TEST_METHOD(Operators)

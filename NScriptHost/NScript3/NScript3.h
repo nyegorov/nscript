@@ -125,7 +125,6 @@ private:
 	void back()				{_pos--;}
 	void read_string(char_t quote);
 	void read_number(char_t c);
-	void read_date(char_t c);
 	void read_name(char_t c);
 };
 
@@ -133,7 +132,7 @@ private:
 class NScript
 {
 public:
-	NScript(string_view script, const context *pcontext = NULL) : _context(pcontext)	{_parser.init(script);}
+	NScript(string_view script, const context *pcontext = nullptr) : _context(pcontext)	{_parser.init(script);}
 	NScript() : _context(nullptr)	{}
 	~NScript(void)					{};
 	value_t eval(string_view script) { std::error_code ec; return eval(script, ec); };
@@ -150,10 +149,8 @@ protected:
 	template <Precedence L> void parse_if(value_t& result, bool skip);
 	void parse_args_list(args_list& args, bool force_args);
 	void parse_func(value_t& result, bool skip);
+	void parse_for(value_t& result, bool skip);
 	/*
-	void ParseForLoop(variant_t& result, bool skip);
-	void ParseArgList(args_list& args, bool forceArgs);
-	void ParseFunc(variant_t& args, bool skip);
 	void ParseObj(variant_t& result, bool skip);*/
 	template <Precedence L, class OP> bool apply_op(OP op, value_t& result, bool skip);
 
@@ -164,11 +161,11 @@ protected:
 };
 
 // Generic implementation of i_object interface
-class object : public i_object	{
+class object : public i_object, public std::enable_shared_from_this<object> {
 public:
 	object()	{};
 	value_t create() const				{ throw std::errc::not_supported; }
-	value_t get()						{ throw std::errc::not_supported; }
+	value_t get()						{ return shared_from_this(); }
 	void set(value_t value)				{ throw std::errc::not_supported; }
 	value_t call(value_t params)		{ throw std::errc::not_supported; }
 	value_t item(value_t item)			{ throw std::errc::not_supported; }
@@ -177,18 +174,7 @@ public:
 	virtual ~object()					{};
 };
 
-/*// User-defined functions
-class Function	: public Object {
-public:
-	Function(const args_list& args, const tchar* body, const Context *pcontext = NULL) : _args(args), _body(body), _context(pcontext)	{}
-	STDMETHODIMP Call(const variant_t& params, variant_t& result);
-protected:
-	~Function()			{}
-	const args_list		_args;
-	const tstring		_body;
-	const Context		_context;
-};
-
+/*
 // User-defined classes
 class Class	: public Object {
 public:
@@ -214,22 +200,6 @@ protected:
 	const args_list		_args;
 };
 
-// Built-in functions
-class BuiltinFunction : public Object	{
-public:
-	typedef void FN(int n, const variant_t v[], variant_t& result);
-	BuiltinFunction(int count, FN *pfunc) : _count(count), _pfunc(pfunc)	{}
-	STDMETHODIMP Call(const variant_t& params, variant_t& result)	{
-		SafeArray a(const_cast<variant_t&>(params));
-		if(_count >= 0 && _count != a.Count())	return DISP_E_BADPARAMCOUNT;
-		(*_pfunc)(a.Count(), a.GetData(), result); 
-		return S_OK;
-	}
-protected:
-	~BuiltinFunction()	{}
-	const int			_count;
-	FN*					_pfunc;
-};
 
 class Composer : public Object {
 public:

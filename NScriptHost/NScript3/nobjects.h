@@ -1,11 +1,13 @@
 #pragma once
 
+#include "nscript3.h"
+
 namespace nscript3 {
 
 class object;
 
 // Class that represents script variables
-class variable : public object, public std::enable_shared_from_this<variable> {
+class variable : public object {
 	value_t			_value;
 public:
 	variable() : _value() {}
@@ -24,7 +26,7 @@ public:
 
 
 // Class that represents arrays
-class narray : public object, public std::enable_shared_from_this<narray> {
+class narray : public object {
 	std::vector<value_t>	_items;
 public:
 	narray() {}
@@ -32,10 +34,10 @@ public:
 	narray(value_t val) : _items{ val } {}
 	value_t get() {
 		if(_items.size() == 1) return _items.front();
-		return { std::static_pointer_cast<i_object>(shared_from_this()) };
+		return shared_from_this();
 	}
 	value_t index(value_t index) {
-		if(auto pi = std::get_if<int>(&index))	return std::make_shared<indexer>(shared_from_this(), *pi);
+		if(auto pi = std::get_if<int>(&index))	return std::make_shared<indexer>(std::static_pointer_cast<narray>(shared_from_this()), *pi);
 		throw std::errc::invalid_argument;
 	}
 	string_t print() const {
@@ -97,11 +99,12 @@ void process_args(const args_list& args, const value_t& params, NScript& script)
 
 class user_function	: public object {
 public:
-	user_function(const args_list& args, string_view body, const context *pcontext = NULL) : _args(args), _body(body), _context(pcontext)	{}
+	user_function(const args_list& args, string_view body, const context *pcontext = nullptr, const context::var_names* pcaptures = nullptr) 
+		: _args(args), _body(body), _context(pcontext, pcaptures)	{}
 	value_t call(value_t params) {
 		NScript script(_body, &_context);
 		process_args(_args, params, script);
-		return script.eval("");
+		return script.eval({});
 	}
 protected:
 	const args_list		_args;

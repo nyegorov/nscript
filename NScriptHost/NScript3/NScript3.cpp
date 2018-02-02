@@ -301,9 +301,8 @@ context::vars_t	context::_globals {
 context::context(const context *base, const var_names *vars) : _locals(1)
 {
 	if(base) {
-		if(vars)	std::for_each(vars->begin(), vars->end(), copy_var(base, this));
+		if(vars)	{ for(auto& v : *vars) if(auto o = base->get(v); o)	set(v, o.value()); }
 		else		_locals.assign(base->_locals.begin(), base->_locals.end());
-		//_locals[0] = base->_locals[0];
 	}
 }
 
@@ -368,85 +367,20 @@ template<NScript::Precedence level> void NScript::parse_if(value_t& result, bool
 		parse<level>(result, cond || skip);
 	}
 }
+
 /*
-// Parse "for([<start>];<cond>;[<inc>])	<body>" statement
-void NScript::ParseForLoop(variant_t& result, bool skip)	{
-	Parser::State condition, increment, body;
-	_parser.Next();
-	if(_parser.GetToken() != Parser::lpar)		Check(E_NS_MISSINGCHARACTER, (void*)'(', &_parser);
-	_parser.Next();
-	if(_parser.GetToken() != Parser::stmt)	{	// start expression
-		Parse(Statement, result, skip);
-		if(_parser.GetToken() != Parser::stmt)	Check(E_NS_MISSINGCHARACTER, (void*)';', &_parser);
-	}
-	_parser.Next();
-	condition = _parser.GetState();
-	if(_parser.GetToken() != Parser::stmt)	{	// exit condition
-		Parse(Statement, result, true);
-		if(_parser.GetToken() != Parser::stmt)	Check(E_NS_MISSINGCHARACTER, (void*)';', &_parser);
-	}
-	_parser.Next();
-	increment = _parser.GetState();
-	if(_parser.GetToken() != Parser::rpar)	{	// increment
-		Parse(Statement, result, true);
-		if(_parser.GetToken() != Parser::rpar)	Check(E_NS_MISSINGCHARACTER, (void*)')', &_parser);
-	}
-	_parser.Next();
-	body = _parser.GetState();
-	Parse(Statement, result, true);				// body
-	if(!skip)	{
-		ULONGLONG start = GetTickCount64();
-		while(true)	{
-			Parse(Statement, condition, result);
-			if(!(bool)result)	break;
-			Parse(Statement, body, result);
-			Parse(Statement, increment, result);
-			if(GetTickCount64()-start > 5000)	Check(E_NS_TOOMANYITERATIONS);
-		}
-	}
-}
-
-// Parse comma-separated arguments list
-void NScript::ParseArgList(args_list& args, bool forceArgs) {
-	auto token = _parser.Next();
-	if(token != Parser::lpar && !forceArgs) return;		// function without parameters
-	if(token == Parser::lpar)	_parser.Next();
-
-	while(_parser.GetToken() == Parser::name) {
-		args.push_back(_parser.GetName());
-		if(_parser.Next() != Parser::comma) break;
-		_parser.Next();
-	};
-	if(args.size() == 1 && args.front() == TEXT("@"))	args.clear();
-
-	if(_parser.GetToken() == Parser::rpar)	_parser.Next();
-}
-
-// Parse "sub [(<arguments>)] <body>" statement
-void NScript::ParseFunc(variant_t& result, bool skip)
-{
-	args_list args;
-	ParseArgList(args, _parser.GetToken() == Parser::idiv);
-	Parser::State state = _parser.GetState();
-	if(_parser.GetToken() == Parser::end)	Check(E_NS_SYNTAXERROR, NULL, &_parser);
-	// _varnames contains list of variables to be captured by function
-	if(!skip)	_varnames.clear();
-	Parse(Assignment,result,true);
-	if(!skip)	result = new Function(args, _parser.GetContent(state, _parser.GetState()).c_str(), &Context(&_context, &_varnames));
-}
-
 // Parse "object [(<arguments>)] {<body>}" statement
 void NScript::ParseObj(variant_t& result, bool skip)
 {
 	args_list args;
 	ParseArgList(args, false);
 	if(_parser.GetToken() == Parser::lcurly)	_parser.Next();
-	Parser::State state = _parser.GetState();
+	Parser::State state = _parser.get_state();
 	if(_parser.GetToken() == Parser::end)	Check(E_NS_SYNTAXERROR, NULL, &_parser);
 	// _varnames contains list of variables to be captured by object
 	if(!skip)	_varnames.clear();
 	Parse(Script,result,true);
-	if(!skip)	result = new Class(args, _parser.GetContent(state, _parser.GetState()).c_str(), &Context(&_context, &_varnames));
+	if(!skip)	result = new Class(args, _parser.GetContent(state, _parser.get_state()).c_str(), &Context(&_context, &_varnames));
 	if(_parser.GetToken() == Parser::rcurly)	_parser.Next();
 }*/
 
@@ -475,7 +409,7 @@ void NScript::parse_func(value_t& result, bool skip)
 	// _varnames contains list of variables to be captured by function
 	if(!skip)	_varnames.clear();
 	parse<Assignment>(result, true);
-	if(!skip)	result = std::make_shared<user_function>(args, _parser.get_content(state, _parser.get_state()), &context(&_context, &_varnames));
+	if(!skip)	result = std::make_shared<user_function>(args, _parser.get_content(state, _parser.get_state()), &_context, &_varnames);
 }
 
 // Jump to position <state>, parse expression and return back
@@ -483,7 +417,7 @@ template <NScript::Precedence level> void NScript::parse(parser::state state, va
 {
 	auto current = _parser.get_state();
 	_parser.set_state(state);
-	parse(level, result, false);
+	parse<level>(result, false);
 	_parser.set_state(current);
 }
 
@@ -567,8 +501,8 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 	case parser::iffunc:	_parser.next(); parse<Assignment>(result, skip); parse_if<Assignment>(result, skip); break;
 	case parser::idiv:		parse_func(result, skip); break;
 	case parser::func:		parse_func(result, skip); break;
-			/*		case Parser::forloop:	ParseForLoop(result, skip);break;
-			case Parser::object:	ParseObj(result, skip);break;*/
+	case parser::forloop:	parse_for(result, skip); break;
+			/*case Parser::object:	ParseObj(result, skip);break;*/
 	case parser::lpar:
 	case parser::lsquare:
 		_parser.next();
@@ -584,6 +518,41 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 		_parser.check_pair(token);
 		break;
 	case parser::end:		throw nscript_error::unexpected_eof;
+	}
+}
+
+// Parse "for([<start>];<cond>;[<inc>])	<body>" statement
+void NScript::parse_for(value_t& result, bool skip) {
+	parser::state condition, increment, body;
+	_parser.next();
+	if(_parser.get_token() != parser::lpar)		throw nscript_error::syntax_error;
+	_parser.next();
+	if(_parser.get_token() != parser::stmt) {	// start expression
+		parse<Statement>(result, skip);
+		if(_parser.get_token() != parser::stmt)	throw nscript_error::syntax_error;
+	}
+	_parser.next();
+	condition = _parser.get_state();
+	if(_parser.get_token() != parser::stmt)	{	// exit condition
+		parse<Statement>(result, true);
+		if(_parser.get_token() != parser::stmt)	throw nscript_error::syntax_error;
+	}
+	_parser.next();
+	increment = _parser.get_state();
+	if(_parser.get_token() != parser::rpar)	{	// increment
+		parse<Statement>(result, true);
+		if(_parser.get_token() != parser::rpar)	throw nscript_error::syntax_error;
+	}
+	_parser.next();
+	body = _parser.get_state();
+	parse<Statement>(result, true);				// body
+	if(!skip)	{
+		while(true)	{
+			parse<Statement>(condition, result);
+			if(!to_int(result))	break;
+			parse<Statement>(body, result);
+			parse<Statement>(increment, result);
+		}
 	}
 }
 
@@ -695,44 +664,6 @@ void parser::read_number(char_t c)
 	if(stage == nsint || stage == nshex)	_value = m;							// integer
 	else									_value = m * pow(10., e1+esign*e2);	// floating-point
 	_token = parser::value;
-}
-
-// Parse date from input stream
-void parser::read_date(char_t quote) {
-	enum date_stage { day = 0, mon, year, hour, min, sec } stage = day;
-	int date[6] = { 0 };
-	char_t c;
-	while(c = read()) {
-		if(isdigit(c)) {
-			date[stage] = date[stage] * 10 + (c - '0');
-		} else if(c == '.') {
-			if(stage > year)					throw nscript_error::syntax_error;
-			stage = date_stage(stage + 1);
-		} else if(c == ':') {
-			if(stage < hour || stage == sec)	throw nscript_error::syntax_error;
-			stage = date_stage(stage + 1);
-		} else if(c == ' ') {
-			if(stage != year && stage != hour)	throw nscript_error::syntax_error;
-			stage = hour;
-		} else	break;
-	};
-	if(c != quote)							throw nscript_error::syntax_error;
-	if(date[2] < 100)	date[2] += date[2] < 50 ? 2000 : 1900;
-	if(date[0] <= 0 || date[0] > 31)		throw nscript_error::syntax_error;
-	if(date[1] <= 0 || date[1] > 12)		throw nscript_error::syntax_error;
-	if(date[2] < 1900 || date[2] > 9999)	throw nscript_error::syntax_error;
-	if(date[3] < 0 || date[3] > 23)			throw nscript_error::syntax_error;
-	if(date[4] < 0 || date[4] > 59)			throw nscript_error::syntax_error;
-	if(date[5] < 0 || date[5] > 59)			throw nscript_error::syntax_error;
-	tm tm;
-	tm.tm_mday = date[0];	
-	tm.tm_mon = date[1] - 1;
-	tm.tm_year = date[2] - 1900;
-	tm.tm_hour = date[3];
-	tm.tm_min = date[4];
-	tm.tm_sec = date[5];
-	auto time = std::mktime(&tm);
-	_value = std::chrono::system_clock::from_time_t(time);
 }
 
 // Parse quoted string from input stream
