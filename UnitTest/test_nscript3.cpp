@@ -193,8 +193,7 @@ public:
 				};\
 				dist = sub(p1, p2) {sqrt((p1.x-p2.x)^2 + (p1.y-p2.y)^2)};\
 				p1=new point(3,4); p2 = new point(3, -1);\
-				p1.length() + dist(p1,p2);\
-			").c_str());
+				p1.length() + dist(p1,p2)").c_str());
 	}
 	TEST_METHOD(Errors)
 	{

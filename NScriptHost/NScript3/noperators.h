@@ -233,10 +233,41 @@ struct op_index : op_base {
 	using op_base::operator();
 };
 
+struct op_item : op_base {
+	const parser::token token = parser::token::dot;
+	const dereference deref = dereference::right;
+	template<class Y> value_t operator()(object_ptr x, Y y) { return x->item(y); }
+	using op_base::operator();
+};
+
+struct op_new : op_base {
+	const parser::token token = parser::token::newobj;
+	const dereference deref = dereference::none;
+	const associativity assoc = associativity::right;
+	template<class X> value_t operator()(X, object_ptr y) { return y->create(); }
+	using op_base::operator();
+};
+
 struct op_statmt : op_base	{
 	const parser::token token = parser::token::stmt;
 	template<class X, class Y> value_t operator()(X, Y y) { return { y }; }
 };
+
+// Functional
+class composer : public object {
+	object_ptr		_left;
+	object_ptr		_right;
+public:
+	composer(object_ptr left, object_ptr right) : _left(left), _right(right) {}
+	value_t call(value_t& params) { return _left->call(_right->call(params)); }
+};
+
+struct op_dot : op_base {
+	const parser::token token = parser::token::mdot;
+	using op_base::operator();
+	value_t operator()(object_ptr x, object_ptr y) { return std::make_shared<composer>(x, y); }
+};
+
 
 }
 

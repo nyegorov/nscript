@@ -337,9 +337,9 @@ static auto s_operators = std::make_tuple(
 
 	std::tuple<op_add, op_sub>(),
 	std::tuple<op_mul, op_div, op_mod>(),
-	std::tuple<op_pow>(),
-	std::tuple<op_ppx, op_mmx, op_neg, op_not, op_lnot>(),
-	std::tuple<op_xpp, op_xmm, op_call, op_index>()
+	std::tuple<op_pow, op_dot>(),
+	std::tuple<op_ppx, op_mmx, op_new, op_neg, op_not, op_lnot>(),
+	std::tuple<op_xpp, op_xmm, op_call, op_index, op_item>()
 );
 
 value_t NScript::eval(std::string_view script, std::error_code& ec)
@@ -368,24 +368,8 @@ template<NScript::Precedence level> void NScript::parse_if(value_t& result, bool
 	}
 }
 
-/*
-// Parse "object [(<arguments>)] {<body>}" statement
-void NScript::ParseObj(variant_t& result, bool skip)
-{
-	args_list args;
-	ParseArgList(args, false);
-	if(_parser.GetToken() == Parser::lcurly)	_parser.Next();
-	Parser::State state = _parser.get_state();
-	if(_parser.GetToken() == Parser::end)	Check(E_NS_SYNTAXERROR, NULL, &_parser);
-	// _varnames contains list of variables to be captured by object
-	if(!skip)	_varnames.clear();
-	Parse(Script,result,true);
-	if(!skip)	result = new Class(args, _parser.GetContent(state, _parser.get_state()).c_str(), &Context(&_context, &_varnames));
-	if(_parser.GetToken() == Parser::rcurly)	_parser.Next();
-}*/
-
 // Parse comma-separated arguments list
-void NScript::parse_args_list(args_list& args, bool force_args) {
+void NScript::parse_args(args_list& args, bool force_args) {
 	auto token = _parser.next();
 	if(token != parser::lpar && !force_args) return;		// function without parameters
 	if(token == parser::lpar)	_parser.next();
@@ -398,18 +382,6 @@ void NScript::parse_args_list(args_list& args, bool force_args) {
 	if(args.size() == 1 && args.front() == "@")	args.clear();
 
 	if(_parser.get_token() == parser::rpar)	_parser.next();
-}
-
-void NScript::parse_func(value_t& result, bool skip)
-{
-	args_list args;
-	parse_args_list(args, _parser.get_token() == parser::idiv);
-	parser::state state = _parser.get_state();
-	if(_parser.get_token() == parser::end)	throw nscript_error::syntax_error;
-	// _varnames contains list of variables to be captured by function
-	if(!skip)	_varnames.clear();
-	parse<Assignment>(result, true);
-	if(!skip)	result = std::make_shared<user_function>(args, _parser.get_content(state, _parser.get_state()), &_context, &_varnames);
 }
 
 // Jump to position <state>, parse expression and return back
@@ -502,7 +474,7 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 	case parser::idiv:		parse_func(result, skip); break;
 	case parser::func:		parse_func(result, skip); break;
 	case parser::forloop:	parse_for(result, skip); break;
-			/*case Parser::object:	ParseObj(result, skip);break;*/
+	case parser::object:	parse_obj(result, skip);break;
 	case parser::lpar:
 	case parser::lsquare:
 		_parser.next();
@@ -556,7 +528,34 @@ void NScript::parse_for(value_t& result, bool skip) {
 	}
 }
 
-// Parser
+void NScript::parse_func(value_t& result, bool skip)
+{
+	args_list args;
+	parse_args(args, _parser.get_token() == parser::idiv);
+	parser::state state = _parser.get_state();
+	if(_parser.get_token() == parser::end)	throw nscript_error::syntax_error;
+	// _varnames contains list of variables to be captured by function
+	if(!skip)	_varnames.clear();
+	parse<Assignment>(result, true);
+	if(!skip)	result = std::make_shared<user_function>(args, _parser.get_content(state, _parser.get_state()), &_context, &_varnames);
+}
+
+// Parse "object [(<arguments>)] {<body>}" statement
+void NScript::parse_obj(value_t& result, bool skip)
+{
+	args_list args;
+	parse_args(args, false);
+	if(_parser.get_token() == parser::lcurly)	_parser.next();
+	parser::state state = _parser.get_state();
+	if(_parser.get_token() == parser::end)	throw nscript_error::syntax_error;
+	// _varnames contains list of variables to be captured by object
+	if(!skip)	_varnames.clear();
+	parse<Script>(result, true);
+	if(!skip)	result = std::make_shared<user_class>(args, _parser.get_content(state, _parser.get_state()), &_context, &_varnames);
+	if(_parser.get_token() == parser::rcurly)	_parser.next();
+}
+
+#pragma region Parser
 
 parser::Keywords parser::_keywords = {
 	{ "for",	parser::forloop },
@@ -695,5 +694,7 @@ void parser::check_pair(parser::token token)
 	if(token == lcurly && _token != rcurly)		throw nscript_error::missing_character;
 	if(token == lpar || token == lsquare || token == lcurly)	next();
 }
+
+#pragma endregion
 
 }

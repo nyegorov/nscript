@@ -140,18 +140,15 @@ public:
 	void add(string_t name, value_t object)	{ _context.set(name, object); }
 
 protected:
-//	friend class Class; 
-//	friend class Function;
 	enum Precedence	{Script = 0,Statement,Assignment,Conditional,Logical,Binary,Equality,Relation,Addition,Multiplication,Power,Unary,Functional,Primary,Term};
 
 	template <Precedence L> void parse(value_t& result, bool skip);
 	template <Precedence L> void parse(parser::state state, value_t& result);
 	template <Precedence L> void parse_if(value_t& result, bool skip);
-	void parse_args_list(args_list& args, bool force_args);
+	void parse_args(args_list& args, bool force_args);
 	void parse_func(value_t& result, bool skip);
 	void parse_for(value_t& result, bool skip);
-	/*
-	void ParseObj(variant_t& result, bool skip);*/
+	void parse_obj(value_t& result, bool skip);
 	template <Precedence L, class OP> bool apply_op(OP op, value_t& result, bool skip);
 
 	parser				_parser;
@@ -174,46 +171,6 @@ public:
 	virtual ~object()					{};
 };
 
-/*
-// User-defined classes
-class Class	: public Object {
-public:
-	Class(const args_list& args, const tchar* body, const Context *pcontext = NULL) : _args(args), _body(body), _context(pcontext)	{}
-	STDMETHODIMP New(variant_t& result);
-	STDMETHODIMP Call(const variant_t& params, variant_t& result)	{_params = params; result = this; return S_OK;}
-
-	class Instance	: public Object {
-	public:
-		Instance(const tchar* body, const Context *pcontext) : _script(body, pcontext)	{}
-		STDMETHODIMP Init(const args_list& args, const variant_t& params);
-		STDMETHODIMP Item(const variant_t& item, variant_t& result);
-	protected:
-		~Instance()			{}
-		NScript				_script;
-	};
-
-protected:
-	~Class()			{}
-	const tstring		_body;
-	variant_t			_params;
-	const Context		_context;
-	const args_list		_args;
-};
-
-
-class Composer : public Object {
-public:
-	Composer(const variant_t& left, const variant_t& right) : _left(left), _right(right) {}
-	STDMETHODIMP Call(const variant_t& params, variant_t& result) {
-		variant_t tmp;
-		HRESULT hr = _right->Call(params, tmp);
-		return SUCCEEDED(hr) ? _left->Call(tmp, result) : hr;
-	}
-protected:
-	IObjectPtr		_left;
-	IObjectPtr		_right;
-};
-*/
 }
 
 namespace std { template<> struct is_error_code_enum<nscript3::nscript_error> : public true_type {}; }

@@ -61,9 +61,9 @@ protected:
 		indexer(std::shared_ptr<narray> arr, int index) : _index(index), _data(arr) {};
 		value_t get() { return _data->items()[_index]; }
 		void set(value_t value) { _data->items()[_index] = value; }
-		value_t call(value_t params) { return std::visit(op_call(), _data->items()[_index], params); }
-		//value_t item(value_t item)		{ return std::visit(op_item(), _data->items()[_index], item); }
-		value_t index(value_t index) { return std::visit(op_index(), _data->items()[_index], index); }
+		value_t call(value_t params)	{ return std::visit(op_call(), _data->items()[_index], params); }
+		value_t item(value_t item)		{ return std::visit(op_item(), _data->items()[_index], item); }
+		value_t index(value_t index)	{ return std::visit(op_index(), _data->items()[_index], index); }
 	};
 };
 
@@ -98,6 +98,9 @@ void process_args(const args_list& args, const value_t& params, NScript& script)
 }
 
 class user_function	: public object {
+	const args_list		_args;
+	const string_t		_body;
+	const context		_context;
 public:
 	user_function(const args_list& args, string_view body, const context *pcontext = nullptr, const context::var_names* pcaptures = nullptr) 
 		: _args(args), _body(body), _context(pcontext, pcaptures)	{}
@@ -106,10 +109,29 @@ public:
 		process_args(_args, params, script);
 		return script.eval({});
 	}
-protected:
+};
+
+// User-defined classes
+class user_class : public object {
 	const args_list		_args;
 	const string_t		_body;
 	const context		_context;
+	value_t				_params;
+public:
+	user_class(const args_list& args, string_view body, const context *pcontext = nullptr, const context::var_names* pcaptures = nullptr)
+		: _args(args), _body(body), _context(pcontext, pcaptures) {}
+	value_t create() const			{ return std::make_shared<instance>(_body, &_context, _args, _params); }
+	value_t call(value_t params)	{ _params = params; return shared_from_this(); }
+
+	class instance : public object {
+		NScript				_script;
+	public:
+		instance(string_view body, const context *pcontext, const args_list& args, value_t params) : _script(body, pcontext) {
+			process_args(args, params, _script);
+			_script.eval({});
+		}
+		value_t item(value_t item)	{ return _script.eval(std::get<string_t>(item)); }
+	};
 };
 
 }
