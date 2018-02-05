@@ -60,6 +60,7 @@ double to_double(value_t v);
 date_t to_date(value_t v);
 class narray;
 narray* to_array_if(const value_t& v);
+narray* to_array_if(const object_ptr& o);
 std::shared_ptr<narray> to_array(const value_t& v);
 
 // Interface for extension objects

@@ -31,7 +31,7 @@ class narray : public object {
 public:
 	narray() {}
 	template<class InputIt> narray(InputIt first, InputIt last) : _items(first, last) {}
-	narray(value_t val) : _items{ val } {}
+	narray(std::initializer_list<value_t> items) : _items(items) {}
 	value_t get() {
 		if(_items.size() == 1) return _items.front();
 		return shared_from_this();
@@ -86,7 +86,6 @@ protected:
 template<class FN> object_ptr make_fn(int count, FN fn) { return std::make_shared<builtin_function<FN>>(count, fn); }
 
 // User-defined functions
-
 void process_args(const args_list& args, const value_t& params, NScript& script) {
 	if(args.size() == 0) {
 		script.add("@", params);
@@ -132,6 +131,53 @@ public:
 		}
 		value_t item(value_t item)	{ return _script.eval(std::get<string_t>(item)); }
 	};
+};
+
+// Functional objects
+class fold_function : public object
+{
+	object_ptr	_fun;
+public:
+	fold_function(object_ptr fun) : _fun(fun) {}
+	value_t call(value_t params) {
+		auto src = to_array(params);
+		if(src->items().empty())	return value_t{};
+		value_t result = src->items().front();
+		for(unsigned i = 1; i < src->items().size(); i++) {
+			result = _fun->call(std::make_shared<narray>(std::initializer_list<value_t>{ result, src->items()[i] }));
+		}
+		return result;
+	}
+};
+
+class map_function : public object
+{
+	object_ptr	_fun;
+public:
+	map_function(object_ptr fun) : _fun(fun) {}
+	value_t call(value_t params) {
+		auto src = to_array(params);
+		auto dst = std::make_shared<narray>();
+		for(auto& i : src->items()) {
+			dst->items().push_back(_fun->call(i));
+		}
+		return dst;
+	}
+};
+
+class filter_function : public object
+{
+	object_ptr	_fun;
+public:
+	filter_function(object_ptr fun) : _fun(fun) {}
+	value_t call(value_t params) {
+		auto src = to_array(params);
+		auto dst = std::make_shared<narray>();
+		for(auto& i : src->items()) {
+			if(to_int(_fun->call(i)))	dst->items().push_back(i);
+		}
+		return dst;
+	}
 };
 
 }

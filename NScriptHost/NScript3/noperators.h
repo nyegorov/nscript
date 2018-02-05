@@ -17,6 +17,8 @@ struct op_base {
 
 struct op_null : op_base { };
 
+#pragma region Mathematical
+
 struct op_add : op_base {
 	const parser::token token = parser::token::plus;
 	using op_base::operator();
@@ -93,7 +95,10 @@ struct op_pow : op_base {
 	value_t operator()(double x, double y) { return { pow(x, y) }; }
 };
 
-// Bitwise
+#pragma endregion // +, -, *, /
+
+#pragma region Bitwise
+
 struct op_and : op_base {
 	const parser::token token = parser::token::and;
 	using op_base::operator();
@@ -104,6 +109,9 @@ struct op_or : op_base {
 	const parser::token token = parser::token::or;
 	using op_base::operator();
 	value_t operator()(int x, int y) { return { x | y }; }
+	template<class X> value_t operator()(X x, object_ptr y) { 
+		return y->call(x); 
+	}
 };
 
 struct op_not : op_base {
@@ -113,16 +121,9 @@ struct op_not : op_base {
 	template<class X> value_t operator()(X, int y) { return ~y; }
 };
 
-// Comparison
-struct comparator {
-	int operator() (std::monostate) { return 0; }
-	int operator() (int i1, int i2) { return i1 < i2 ? -1 : i1 > i2 ? 1 : 0; }
-	int operator() (int i1, double d2) { return i1 < d2 ? -1 : i1 > d2 ? 1 : 0; }
-	int operator() (double d1, int i2) { return d1 < i2 ? -1 : d1 > i2 ? 1 : 0; }
-	int operator() (double d1, double d2) { return d1 < d2 ? -1 : d1 > d2 ? 1 : 0; }
-	int operator() (string s1, string s2) { return s1.compare(s2); }
-	template<class X, class Y> int operator()(X x, Y y) { throw nscript_error::type_mismatch; return 0; }
-};
+#pragma endregion      // &, |, ~
+
+#pragma region Logical
 
 struct op_gt : op_base {
 	const parser::token token = parser::token::gt;
@@ -175,7 +176,10 @@ struct op_lnot : op_base {
 
 struct op_if : op_base { const parser::token token = parser::token::ifop; };
 
-// Assignments
+#pragma endregion		 // >, <, >=, <=, ==, !=, &&, ||, !
+
+#pragma region Assignments
+
 template <class OP, parser::token TOK>
 struct op_xset : op_base {
 	const parser::token token = TOK;
@@ -209,6 +213,9 @@ struct op_subset : op_xset<op_sub, parser::minusset>{ using op_xset::operator();
 struct op_mulset : op_xset<op_mul, parser::mulset>	{ using op_xset::operator(); };
 struct op_divset : op_xset<op_div, parser::divset>	{ using op_xset::operator(); };
 
+#pragma endregion  // ++, --, +=, -=, *=, /=
+
+#pragma region Objects
 
 struct op_assign : op_base {
 	const parser::token token = parser::token::assign;
@@ -253,7 +260,10 @@ struct op_statmt : op_base	{
 	template<class X, class Y> value_t operator()(X, Y y) { return { y }; }
 };
 
-// Functional
+#pragma endregion      // ;, =, call, index, item, new
+
+#pragma region Functional
+
 class composer : public object {
 	object_ptr		_left;
 	object_ptr		_right;
@@ -268,10 +278,51 @@ struct op_dot : op_base {
 	value_t operator()(object_ptr x, object_ptr y) { return std::make_shared<composer>(x, y); }
 };
 
+struct op_head : op_base {
+	const parser::token token = parser::token::apo;
+	const associativity assoc = associativity::right;
+	const dereference deref = dereference::right;
+	template<class X, class Y> value_t operator()(X, Y y) { return y; }
+	template<class X> value_t operator()(X, object_ptr y) { 
+		if(auto pa = std::dynamic_pointer_cast<narray>(y); pa) 
+			return pa->items().empty() ? value_t{} : pa->items().front(); 
+		throw std::errc::invalid_argument;
+	}
+};
+
+struct op_tail : op_base {
+	const parser::token token = parser::token::apo;
+	template<class X, class Y> value_t operator()(X x, Y) { return value_t{}; }
+	template<class Y> value_t operator()(object_ptr x, Y) { 
+		if(auto pa = to_array_if(x); pa)	return pa->items().empty() ? value_t{} : std::make_shared<narray>(pa->items().begin() + 1, pa->items().end()); 
+		throw std::errc::invalid_argument;
+	}
+};
+
+struct op_join : op_base {
+	const parser::token token = parser::token::colon;
+	template<class X, class Y> value_t operator()(X x, Y y) { 
+		if(auto ys = to_array_if({ y }); ys)
+			return ys->items().insert(ys->items().begin(), x), y;
+		else
+			return std::make_shared<narray>(std::initializer_list<value_t>{x, y});
+	}
+	template<class Y> value_t operator()(object_ptr x, Y y) {
+		if(auto xs = to_array_if(x); xs) {
+			if(auto ys = to_array_if({ y }); ys)
+				std::copy(ys->items().begin(), ys->items().end(), std::back_inserter(xs->items()));
+			else
+				xs->items().emplace_back(y);
+			return x;
+		}	else {
+			if(auto ys = to_array_if({ y }); ys)
+				return ys->items().insert(ys->items().begin(), x), y;
+			else
+				return std::make_shared<narray>(std::initializer_list<value_t>{x, y});
+		}
+	}
+};
+#pragma endregion   // ·, `, :
 
 }
-
-template<> struct std::less<nscript3::value_t> {
-	bool operator()(const nscript3::value_t &v1, const nscript3::value_t& v2) { return std::visit(nscript3::comparator(), v1, v2) < 0; }
-};
 

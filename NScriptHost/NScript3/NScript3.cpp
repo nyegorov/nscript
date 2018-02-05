@@ -17,6 +17,10 @@
 #undef min
 #undef max
 
+/*template<> struct std::less<nscript3::value_t> {
+	bool operator()(const nscript3::value_t &v1, const nscript3::value_t& v2) { return std::visit(nscript3::comparator(), v1, v2) < 0; }
+};*/
+
 namespace nscript3	{
 
 const std::error_category& nscript_category()
@@ -28,6 +32,27 @@ const std::error_category& nscript_category()
 std::error_code make_error_code(nscript_error e)			{ return std::error_code(static_cast<int>(e), nscript_category()); }
 std::error_condition make_error_condition(nscript_error e)	{ return std::error_condition(static_cast<int>(e), nscript_category()); }
 
+struct comparator {
+	template<class X> int operator() (std::monostate, X) { return 1; }
+	template<class Y> int operator() (Y, std::monostate) { return -1; }
+	int operator() (std::monostate, std::monostate)		 { return 0; }
+	int operator() (int i1, int i2) { return i1 < i2 ? -1 : i1 > i2 ? 1 : 0; }
+	int operator() (int i1, double d2) { return i1 < d2 ? -1 : i1 > d2 ? 1 : 0; }
+	int operator() (double d1, int i2) { return d1 < i2 ? -1 : d1 > i2 ? 1 : 0; }
+	int operator() (double d1, double d2) { return d1 < d2 ? -1 : d1 > d2 ? 1 : 0; }
+	int operator() (string s1, string s2) { return s1.compare(s2); }
+	int operator() (object_ptr o1, object_ptr o2) {
+		if(auto a1 = to_array_if(o1), a2 = to_array_if(o2); a1 && a2) {
+			if(a1->items().size() != a2->items().size())	return operator()((int)a1->items().size(), (int)a2->items().size());
+			auto[p1, p2] = std::mismatch(a1->items().begin(), a1->items().end(), a2->items().begin(), a2->items().end());
+			if(p1 == a1->items().end() || p2 == a2->items().end())	return 0;
+			return std::visit(*this, *p1, *p2);
+		}
+		return o1 < o2 ? -1 : o1 > o2 ? 1 : 0;
+	}
+	template<class X, class Y> int operator()(X x, Y y) { throw nscript_error::type_mismatch; }
+};
+
 bool is_empty(const value_t& v) { return v.index() == 0; }
 tm date2tm(date_t date)
 {
@@ -38,10 +63,16 @@ tm date2tm(date_t date)
 }
 
 class narray;
+
+narray* to_array_if(const object_ptr& o)
+{
+	if(auto pa = std::dynamic_pointer_cast<narray>(o); pa)	return pa.get();
+	return nullptr;
+}
+
 narray* to_array_if(const value_t& v)
 {
-	if(auto pobj = std::get_if<object_ptr>(&v); pobj)
-		if(auto parr = std::dynamic_pointer_cast<narray>(*pobj); parr)	return parr.get();
+	if(auto pobj = std::get_if<object_ptr>(&v); pobj)	return to_array_if(*pobj);
 	return nullptr;
 }
 
@@ -50,7 +81,7 @@ std::shared_ptr<narray> to_array(const value_t& v)
 	if(auto pobj = std::get_if<object_ptr>(&v); pobj)
 		if(auto parr = std::dynamic_pointer_cast<narray>(*pobj); parr)	return parr;
 	return is_empty(v) ? std::make_shared<narray>() 
-					   : std::make_shared<narray>(v);
+					   : std::make_shared<narray>(std::initializer_list<value_t>{ v });
 }
 
 std::string to_string(value_t v)
@@ -160,63 +191,6 @@ date_t to_date(value_t v)
 }
 
 // Globals
-/*
-const TCHAR *Messages[] = {
-#ifdef UNICODE
-	TEXT("%S"),
-#else
-	TEXT("%s"),
-#endif
-	TEXT("Unexpected end"),
-	TEXT("Missing '%c' character"),
-	TEXT("Unknown variable '%s'"),
-	TEXT("Too many iterations"),
-	TEXT("Syntax error"),
-};
-
-// set ErrorInfo 
-void SetError(HRESULT hr, const void* param = TEXT(""), Parser* parser = NULL)
-{
-	ICreateErrorInfoPtr pcei;
-	CreateErrorInfo(&pcei);
-
-	tchar buf[1024];
-	if(HRESULT_FACILITY(hr) == FACILITY_NSCRIPT && HRESULT_CODE(hr) <= _countof(Messages))	{
-		wsprintf(buf, Messages[HRESULT_CODE(hr)], param);
-	}	else	{
-		lstrcpyn(buf, (LPCTSTR)param, _countof(buf));
-	}
-	pcei->SetDescription(bstr_t(buf));
-	if(parser)	{
-		pcei->SetHelpContext((DWORD)parser->GetState());
-		pcei->SetHelpFile(bstr_t(parser->GetContent(0,-1).c_str()));
-	}
-
-	SetErrorInfo(0, IErrorInfoPtr(pcei));
-}
-*/
-// throw exception when hr fails
-/*void check(std::error_code err, const void* param = nullptr, parser* parser = nullptr)	{
-	throw err;
-}
-
-void check(std::errc err, const void* param = nullptr, parser* parser = nullptr) {
-	check(make_error_code(err), param, parser);
-}*/
-/*
-// process list of argument
-HRESULT ProcessArgsList(const args_list& args, const variant_t& params, NScript& script)	{
-	if(args.size() == 0)	{
-		script.AddObject(TEXT("@"),params);
-	}	else	{
-		SafeArray a(const_cast<variant_t&>(params));
-		if(args.size() != a.Count())	return DISP_E_BADPARAMCOUNT;
-		const variant_t *pargs = a.GetData();
-		for(int i = a.Count()-1; i>=0; i--)	script.AddObject(args[i].c_str(),pargs[i]);
-	}
-	return S_OK;
-}
-*/
 // 'dereference' object. If v holds an ext. object, replace it with the value of object
 value_t& operator *(value_t& v)	{
 	if(auto pobj = std::get_if<object_ptr>(&v)) {
@@ -225,14 +199,7 @@ value_t& operator *(value_t& v)	{
 	return v;
 }
 
-// Context
-struct copy_var {
-	const context	*_from;
-	context			*_to;
-	copy_var(const context *from ,context *to) : _from(from), _to(to)	{};
-	void operator() (const string_t& name) { /*_to->set(_from->get(name));*/ }
-};
-
+#pragma region Context
 context::vars_t	context::_globals {
 	{ "empty",	value_t()},
 	{ "true",	{ -1} },
@@ -291,9 +258,9 @@ context::vars_t	context::_globals {
 	{ "remove",	make_fn(2, [](const params_t& args) { auto a = to_array(args[0]); return a->items().erase( a->items().begin() + to_int(args[1])), a; }) },
 	{ "min",	make_fn(-1, [](const params_t& args) { auto pe = std::min_element(begin(args), end(args), std::less<nscript3::value_t>()); return pe == end(args) ? value_t{} : *pe; }) },
 	{ "max",	make_fn(-1, [](const params_t& args) { auto pe = std::max_element(begin(args), end(args), std::less<nscript3::value_t>()); return pe == end(args) ? value_t{} : *pe; }) },
-	{ "fold",	make_fn(1, [](const params_t& args) { return 0; }) },
-	{ "map",	make_fn(1, [](const params_t& args) { return 0; }) },
-	{ "filter",	make_fn(1, [](const params_t& args) { return 0; }) },
+	{ "fold",	make_fn(1, [](const params_t& args) { return std::make_shared<fold_function>(std::get<object_ptr>(args[0])); }) },
+	{ "map",	make_fn(1, [](const params_t& args) { return std::make_shared<map_function>(std::get<object_ptr>(args[0])); }) },
+	{ "filter",	make_fn(1, [](const params_t& args) { return std::make_shared<filter_function>(std::get<object_ptr>(args[0])); }) },
 	{ "head",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : args.front(); }) },
 	{ "tail",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : std::make_shared<narray>(args.begin() + 1, args.end()); }) },
 };
@@ -324,11 +291,12 @@ std::optional<value_t> context::get(string_t name) const
 	}
 	return {};
 }
+#pragma endregion
 
 static auto s_operators = std::make_tuple(
 	std::tuple<op_statmt>(),
 	std::tuple<>(),
-	std::tuple<op_assign, op_addset, op_subset, op_mulset, op_divset>(),
+	std::tuple<op_assign, op_addset, op_subset, op_mulset, op_divset, op_join>(),
 	std::tuple<op_if>(),
 	std::tuple<op_land, op_lor>(),
 	std::tuple<op_and, op_or>(),
@@ -338,22 +306,22 @@ static auto s_operators = std::make_tuple(
 	std::tuple<op_add, op_sub>(),
 	std::tuple<op_mul, op_div, op_mod>(),
 	std::tuple<op_pow, op_dot>(),
-	std::tuple<op_ppx, op_mmx, op_new, op_neg, op_not, op_lnot>(),
-	std::tuple<op_xpp, op_xmm, op_call, op_index, op_item>()
+	std::tuple<op_ppx, op_mmx, op_new, op_neg, op_not, op_lnot, op_head>(),
+	std::tuple<op_xpp, op_xmm, op_call, op_index, op_item, op_tail>()
 );
 
 value_t NScript::eval(std::string_view script, std::error_code& ec)
 {
 	value_t result;
 	_context.push();
-	try	{
+	//try	{
 		_parser.init(script);
 		parse<Script>(result, false);
 		if(_parser.get_token() != parser::end)	throw nscript_error::syntax_error;
 		return *result;
-	}
+	/*}
 	catch(nscript_error e)	 { ec = e; }
-	catch(std::errc e)		 { ec = make_error_code(e); }
+	catch(std::errc e)		 { ec = make_error_code(e); }*/
 	_context.pop();
 	return result;
 }
@@ -444,7 +412,7 @@ template<> void NScript::parse<NScript::Statement>(value_t& result, bool skip)
 	parser::token token = _parser.get_token();
 	parse<Assignment>(result, skip);
 	if(_parser.get_token() == parser::comma) {
-		auto a = std::make_shared<narray>(*result);
+		auto a = std::make_shared<narray>(std::initializer_list<value_t>{*result});
 		do {
 			value_t v;
 			_parser.next();

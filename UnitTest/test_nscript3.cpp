@@ -150,18 +150,18 @@ public:
 	TEST_METHOD(Functional)
 	{
 		Assert::AreEqual("15", eval("sum = fold(fn(x,y) x+y); sum([4,5,6])").c_str());
-		Assert::AreEqual("36", eval("fold(fn(x,y) x*y)(fmap(fn @^2)([1,2,3]))").c_str());
+		Assert::AreEqual("36", eval("fold(fn(x,y) x*y)(map(fn @^2)([1,2,3]))").c_str());
 		Assert::AreEqual("35", eval(R"(
 				odds   = \x x%2==1; 
 				square = \@ @^2; 
 				plus   = \x,y x+y; 
-				[1,2,3,4,5] | filter(odds) | fmap(square) | fold(plus)
+				[1,2,3,4,5] | filter(odds) | map(square) | fold(plus)
 			)").c_str());
 		Assert::AreEqual("brothers,in,metal", eval("['brothers', 'in', 'metal'] | fold(\\x,y x+','+y)").c_str());
 		Assert::AreEqual("DRAGONS=KEEPERS", eval(R"(
 				join  = \c fold(\x,y x+c+y);
 				split = \s,c (n = instr(s, c)) < 0 ? s : [left(s, n):split(mid(s, n + 1, len(s) - n), c)];
-				split('holy dragons keepers of time', ' ') | filter(\@ len(@)>4) | fmap(upper) | join('=')
+				split('holy dragons keepers of time', ' ') | filter(\@ len(@)>4) | map(upper) | join('=')
 			)").c_str());
 
 		Assert::AreEqual("[1; 1; 2; 3; 3; 4; 5]", eval(R"(
@@ -173,7 +173,7 @@ public:
 		Assert::AreEqual("[* NSCRIPT *; * LISP *; * COQ *]", eval(R"(
 				big = upper;
 				stars = \s '* ' + s + ' *';
-				pretty = fmap(stars·big);
+				pretty = map(stars·big);
 				["nscript", "lisp", "coq"] | pretty;
 			)").c_str());
 		Assert::AreEqual("196", eval(R"(
