@@ -47,10 +47,12 @@ std::error_code make_error_code(nscript_error e);
 std::error_condition make_error_condition(nscript_error e);
 
 struct i_object;
+class v_array;
 using std::string_view;
 using string_t = std::string;
 using date_t = std::chrono::system_clock::time_point;
 using object_ptr = std::shared_ptr<i_object>;
+using array_ptr = std::shared_ptr<v_array>;
 using value_t = std::variant<std::monostate, int, double, string_t, date_t, object_ptr>;
 using params_t = std::vector<value_t>;
 
@@ -58,10 +60,10 @@ std::string to_string(value_t v);
 int to_int(value_t v);
 double to_double(value_t v);
 date_t to_date(value_t v);
-class narray;
-narray* to_array_if(const value_t& v);
-narray* to_array_if(const object_ptr& o);
-std::shared_ptr<narray> to_array(const value_t& v);
+params_t* to_array_if(const value_t& v);
+params_t* to_array_if(const object_ptr& o);
+array_ptr to_array(const value_t& v);
+bool is_empty(const value_t& v);
 
 // Interface for extension objects
 struct i_object {

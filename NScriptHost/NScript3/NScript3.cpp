@@ -43,9 +43,9 @@ struct comparator {
 	int operator() (string s1, string s2) { return s1.compare(s2); }
 	int operator() (object_ptr o1, object_ptr o2) {
 		if(auto a1 = to_array_if(o1), a2 = to_array_if(o2); a1 && a2) {
-			if(a1->items().size() != a2->items().size())	return operator()((int)a1->items().size(), (int)a2->items().size());
-			auto[p1, p2] = std::mismatch(a1->items().begin(), a1->items().end(), a2->items().begin(), a2->items().end());
-			if(p1 == a1->items().end() || p2 == a2->items().end())	return 0;
+			if(a1->size() != a2->size())	return operator()((int)a1->size(), (int)a2->size());
+			auto[p1, p2] = std::mismatch(a1->begin(), a1->end(), a2->begin(), a2->end());
+			if(p1 == a1->end() || p2 == a2->end())	return 0;
 			return std::visit(*this, *p1, *p2);
 		}
 		return o1 < o2 ? -1 : o1 > o2 ? 1 : 0;
@@ -62,26 +62,26 @@ tm date2tm(date_t date)
 	return tm;
 }
 
-class narray;
+class v_array;
 
-narray* to_array_if(const object_ptr& o)
+params_t* to_array_if(const object_ptr& o)
 {
-	if(auto pa = std::dynamic_pointer_cast<narray>(o); pa)	return pa.get();
+	if(auto pa = std::dynamic_pointer_cast<v_array>(o); pa)	return &pa->items();
 	return nullptr;
 }
 
-narray* to_array_if(const value_t& v)
+params_t* to_array_if(const value_t& v)
 {
 	if(auto pobj = std::get_if<object_ptr>(&v); pobj)	return to_array_if(*pobj);
 	return nullptr;
 }
 
-std::shared_ptr<narray> to_array(const value_t& v)
+array_ptr to_array(const value_t& v)
 {
 	if(auto pobj = std::get_if<object_ptr>(&v); pobj)
-		if(auto parr = std::dynamic_pointer_cast<narray>(*pobj); parr)	return parr;
-	return is_empty(v) ? std::make_shared<narray>() 
-					   : std::make_shared<narray>(std::initializer_list<value_t>{ v });
+		if(auto parr = std::dynamic_pointer_cast<v_array>(*pobj); parr)	return parr;
+	return is_empty(v) ? std::make_shared<v_array>() 
+					   : std::make_shared<v_array>(std::initializer_list<value_t>{ v });
 }
 
 std::string to_string(value_t v)
@@ -262,7 +262,7 @@ context::vars_t	context::_globals {
 	{ "map",	make_fn(1, [](const params_t& args) { return std::make_shared<map_function>(std::get<object_ptr>(args[0])); }) },
 	{ "filter",	make_fn(1, [](const params_t& args) { return std::make_shared<filter_function>(std::get<object_ptr>(args[0])); }) },
 	{ "head",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : args.front(); }) },
-	{ "tail",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : std::make_shared<narray>(args.begin() + 1, args.end()); }) },
+	{ "tail",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : std::make_shared<v_array>(args.begin() + 1, args.end()); }) },
 };
 
 context::context(const context *base, const var_names *vars) : _locals(1)
@@ -324,16 +324,6 @@ value_t NScript::eval(std::string_view script, std::error_code& ec)
 	catch(std::errc e)		 { ec = make_error_code(e); }*/
 	_context.pop();
 	return result;
-}
-
-// Parse "if <cond> <true-part> [else <part>]" statement
-template<NScript::Precedence level> void NScript::parse_if(value_t& result, bool skip)	{
-	bool cond = skip || to_int(result);
-	parse<level>(result, !cond || skip);
-	if(_parser.get_token() == parser::ifelse || _parser.get_token() == parser::colon)	{
-		_parser.next();
-		parse<level>(result, cond || skip);
-	}
 }
 
 // Parse comma-separated arguments list
@@ -412,7 +402,7 @@ template<> void NScript::parse<NScript::Statement>(value_t& result, bool skip)
 	parser::token token = _parser.get_token();
 	parse<Assignment>(result, skip);
 	if(_parser.get_token() == parser::comma) {
-		auto a = std::make_shared<narray>(std::initializer_list<value_t>{*result});
+		auto a = std::make_shared<v_array>(std::initializer_list<value_t>{*result});
 		do {
 			value_t v;
 			_parser.next();
@@ -461,6 +451,16 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 	}
 }
 
+// Parse "if <cond> <true-part> [else <part>]" statement
+template<NScript::Precedence level> void NScript::parse_if(value_t& result, bool skip) {
+	bool cond = skip || to_int(*result);
+	parse<level>(result, !cond || skip);
+	if(_parser.get_token() == parser::ifelse || _parser.get_token() == parser::colon) {
+		_parser.next();
+		parse<level>(result, cond || skip);
+	}
+}
+
 // Parse "for([<start>];<cond>;[<inc>])	<body>" statement
 void NScript::parse_for(value_t& result, bool skip) {
 	parser::state condition, increment, body;
@@ -489,7 +489,7 @@ void NScript::parse_for(value_t& result, bool skip) {
 	if(!skip)	{
 		while(true)	{
 			parse<Statement>(condition, result);
-			if(!to_int(result))	break;
+			if(!to_int(*result))	break;
 			parse<Statement>(body, result);
 			parse<Statement>(increment, result);
 		}
@@ -542,8 +542,8 @@ parser::token parser::next()
 {
 	_lastpos = _pos;
 	char_t c, cc;
-	while(isspace(c = read()));
-	switch(c)	{
+	while(iswspace(c = read()));
+	switch(unsigned char(c))	{
 		case '\0':	_token = end;break;
 		case '+':	cc = peek(); _token = (cc == '+' ? read(), unaryplus  : cc == '=' ? read(), plusset  : plus); break;
 		case '-':	cc = peek(); _token = (cc == '-' ? read(), unaryminus : cc == '=' ? read(), minusset : minus); break;
@@ -576,7 +576,7 @@ parser::token parser::next()
 		case '?':	_token = ifop;break;
 		case ':':	_token = peek() == '=' ? read(), setvar : colon;break;
 		default:
-			if(isdigit(c))	{
+			if(isdigit(unsigned char(c)))	{
 				read_number(c);
 			}	else	{
 				read_name(c);
@@ -649,9 +649,9 @@ void parser::read_string(char_t quote)	{
 // Parse object name from input stream
 void parser::read_name(char_t c)	
 {
-	if(!isalpha(c) && c != '@' && c != '_')		throw nscript_error::syntax_error;
+	if(!isalpha(unsigned char(c)) && c != '@' && c != '_')		throw nscript_error::syntax_error;
 	_name = c;
-	while(isalnum(c = read()) || c == '_')	_name += c;
+	while(isalnum(unsigned char(c = read())) || c == '_')	_name += c;
 	back();
 }
 

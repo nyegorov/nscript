@@ -26,18 +26,19 @@ public:
 
 
 // Class that represents arrays
-class narray : public object {
+class v_array : public object {
 	std::vector<value_t>	_items;
 public:
-	narray() {}
-	template<class InputIt> narray(InputIt first, InputIt last) : _items(first, last) {}
-	narray(std::initializer_list<value_t> items) : _items(items) {}
+	v_array() {}
+	template<class InputIt> v_array(InputIt first, InputIt last) : _items(first, last) {}
+	v_array(std::initializer_list<value_t> items) : _items(items) {}
 	value_t get() {
-		if(_items.size() == 1) return _items.front();
+		if(_items.empty())		return value_t{};
+		if(_items.size() == 1)	return _items.front();
 		return shared_from_this();
 	}
 	value_t index(value_t index) {
-		if(auto pi = std::get_if<int>(&index))	return std::make_shared<indexer>(std::static_pointer_cast<narray>(shared_from_this()), *pi);
+		if(auto pi = std::get_if<int>(&index))	return std::make_shared<indexer>(std::static_pointer_cast<v_array>(shared_from_this()), *pi);
 		throw std::errc::invalid_argument;
 	}
 	string_t print() const {
@@ -55,10 +56,10 @@ public:
 
 protected:
 	class indexer : public object {
-		std::shared_ptr<narray>	_data;
+		std::shared_ptr<v_array>	_data;
 		int						_index;
 	public:
-		indexer(std::shared_ptr<narray> arr, int index) : _index(index), _data(arr) {};
+		indexer(std::shared_ptr<v_array> arr, int index) : _index(index), _data(arr) {};
 		value_t get() { return _data->items()[_index]; }
 		void set(value_t value) { _data->items()[_index] = value; }
 		value_t call(value_t params)	{ return std::visit(op_call(), _data->items()[_index], params); }
@@ -73,8 +74,8 @@ public:
 	builtin_function(int count, FN func) : _count(count), _func(func) {}
 	value_t call(value_t params) {
 		if(auto pa = to_array_if(params); pa) {
-			if(_count >= 0 && _count != pa->items().size())	throw nscript_error::bad_param_count;
-			return _func(pa->items());
+			if(_count >= 0 && _count != pa->size())	throw nscript_error::bad_param_count;
+			return _func(*pa);
 		} else if(is_empty(params) && _count <= 0)	return _func({});
 		else if(_count < 0 || _count == 1)			return _func({ params });
 		else										throw nscript_error::bad_param_count;
@@ -89,6 +90,8 @@ template<class FN> object_ptr make_fn(int count, FN fn) { return std::make_share
 void process_args(const args_list& args, const value_t& params, NScript& script) {
 	if(args.size() == 0) {
 		script.add("@", params);
+	} else if(args.size() == 1 && is_empty(params))	{
+		script.add(args.front(), params);
 	} else {
 		auto a = to_array(params);
 		if(args.size() != a->items().size())	throw nscript_error::bad_param_count;
@@ -144,7 +147,7 @@ public:
 		if(src->items().empty())	return value_t{};
 		value_t result = src->items().front();
 		for(unsigned i = 1; i < src->items().size(); i++) {
-			result = _fun->call(std::make_shared<narray>(std::initializer_list<value_t>{ result, src->items()[i] }));
+			result = _fun->call(std::make_shared<v_array>(std::initializer_list<value_t>{ result, src->items()[i] }));
 		}
 		return result;
 	}
@@ -157,7 +160,7 @@ public:
 	map_function(object_ptr fun) : _fun(fun) {}
 	value_t call(value_t params) {
 		auto src = to_array(params);
-		auto dst = std::make_shared<narray>();
+		auto dst = std::make_shared<v_array>();
 		for(auto& i : src->items()) {
 			dst->items().push_back(_fun->call(i));
 		}
@@ -172,7 +175,7 @@ public:
 	filter_function(object_ptr fun) : _fun(fun) {}
 	value_t call(value_t params) {
 		auto src = to_array(params);
-		auto dst = std::make_shared<narray>();
+		auto dst = std::make_shared<v_array>();
 		for(auto& i : src->items()) {
 			if(to_int(_fun->call(i)))	dst->items().push_back(i);
 		}

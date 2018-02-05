@@ -174,7 +174,7 @@ public:
 				big = upper;
 				stars = \s '* ' + s + ' *';
 				pretty = map(stars·big);
-				["nscript", "lisp", "coq"] | pretty;
+				["nscript", "lisp", "coq"] | pretty
 			)").c_str());
 		Assert::AreEqual("196", eval(R"(
 				divs = fn(x) {

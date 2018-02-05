@@ -269,7 +269,7 @@ class composer : public object {
 	object_ptr		_right;
 public:
 	composer(object_ptr left, object_ptr right) : _left(left), _right(right) {}
-	value_t call(value_t& params) { return _left->call(_right->call(params)); }
+	value_t call(value_t params) { return _left->call(_right->call(params)); }
 };
 
 struct op_dot : op_base {
@@ -284,7 +284,7 @@ struct op_head : op_base {
 	const dereference deref = dereference::right;
 	template<class X, class Y> value_t operator()(X, Y y) { return y; }
 	template<class X> value_t operator()(X, object_ptr y) { 
-		if(auto pa = std::dynamic_pointer_cast<narray>(y); pa) 
+		if(auto pa = std::dynamic_pointer_cast<v_array>(y); pa) 
 			return pa->items().empty() ? value_t{} : pa->items().front(); 
 		throw std::errc::invalid_argument;
 	}
@@ -294,7 +294,7 @@ struct op_tail : op_base {
 	const parser::token token = parser::token::apo;
 	template<class X, class Y> value_t operator()(X x, Y) { return value_t{}; }
 	template<class Y> value_t operator()(object_ptr x, Y) { 
-		if(auto pa = to_array_if(x); pa)	return pa->items().empty() ? value_t{} : std::make_shared<narray>(pa->items().begin() + 1, pa->items().end()); 
+		if(auto pa = to_array_if(x); pa)	return pa->empty() ? value_t{} : std::make_shared<v_array>(pa->begin() + 1, pa->end()); 
 		throw std::errc::invalid_argument;
 	}
 };
@@ -302,23 +302,26 @@ struct op_tail : op_base {
 struct op_join : op_base {
 	const parser::token token = parser::token::colon;
 	template<class X, class Y> value_t operator()(X x, Y y) { 
+		if(is_empty(x))	return { y };
+		if(is_empty(y))	return { x };
 		if(auto ys = to_array_if({ y }); ys)
-			return ys->items().insert(ys->items().begin(), x), y;
+			return ys->insert(ys->begin(), x), y;
 		else
-			return std::make_shared<narray>(std::initializer_list<value_t>{x, y});
+			return std::make_shared<v_array>(std::initializer_list<value_t>{x, y});
 	}
 	template<class Y> value_t operator()(object_ptr x, Y y) {
+		if(is_empty(y))	return { x };
 		if(auto xs = to_array_if(x); xs) {
 			if(auto ys = to_array_if({ y }); ys)
-				std::copy(ys->items().begin(), ys->items().end(), std::back_inserter(xs->items()));
+				std::copy(ys->begin(), ys->end(), std::back_inserter(*xs));
 			else
-				xs->items().emplace_back(y);
+				xs->emplace_back(y);
 			return x;
 		}	else {
 			if(auto ys = to_array_if({ y }); ys)
-				return ys->items().insert(ys->items().begin(), x), y;
+				return ys->insert(ys->begin(), x), y;
 			else
-				return std::make_shared<narray>(std::initializer_list<value_t>{x, y});
+				return std::make_shared<v_array>(std::initializer_list<value_t>{x, y});
 		}
 	}
 };
