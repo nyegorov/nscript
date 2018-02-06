@@ -64,6 +64,7 @@ value_t& operator *(value_t& v)	{
 #pragma region Context
 context::vars_t	context::_globals {
 	{ "empty",	value_t()},
+	{ "hash",	std::make_shared<assoc_array>() },
 	{ "true",	{ -1} },
 	{ "false",	{ 0} },
 	{ "int",	make_fn(1, [](const params_t& args) { return to_int(args.front()); }) },
@@ -92,7 +93,7 @@ context::vars_t	context::_globals {
 	{ "log",	make_fn(1, [](const params_t& args) { return log(to_double(args.front())); }) },
 	{ "sqr",	make_fn(1, [](const params_t& args) { return sqrt(to_double(args.front())); }) },
 	{ "sqrt",	make_fn(1, [](const params_t& args) { return sqrt(to_double(args.front())); }) },
-	{ "atan2",	make_fn(2, [](const params_t& args) { return atan2(to_double(args[0]), to_double(args[1])); }) },
+	{ "atan2",	make_fn(2, [](const params_t& args) { auto x = to_double(args[0]), y = to_double(args[1]); return atan2(x, y); }) },
 	{ "sgn",	make_fn(1, [](const params_t& args) { double d = to_double(args.front()); return d < 0 ? -1 : d > 0 ? 1 : 0; }) },
 	{ "fract",	make_fn(1, [](const params_t& args) { return to_double(args.front()) - to_int(args.front()); }) },
 	// String
@@ -221,7 +222,7 @@ template <NScript::Precedence P, class OP> bool NScript::apply_op(OP op, value_t
 			return true;
 		}
 
-		value_t right;
+		value_t right = result;
 
 		// parse right-hand operand
 		if(op.token == parser::dot) { right = _parser.get_value(); _parser.next(); }	// special case for '.' operator

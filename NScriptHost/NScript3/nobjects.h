@@ -196,4 +196,41 @@ public:
 	}
 };
 
+// Class that represents arrays
+class assoc_array : public object {
+	std::unordered_map<string_t, value_t>	_items;
+public:
+	assoc_array() {}
+	value_t create() const		{ return std::make_shared<assoc_array>(); }
+	value_t index(value_t index){ return std::make_shared<indexer>(std::static_pointer_cast<assoc_array>(shared_from_this()), to_string(index)); }
+	value_t item(string_t item)	{ return std::make_shared<indexer>(std::static_pointer_cast<assoc_array>(shared_from_this()), item); }
+	string_t print() const {
+		std::stringstream ss;
+		ss << '[';
+		std::stringstream::pos_type pos = 0;
+		for(auto& [k,v] : _items) {
+			if(ss.tellp() > 1) ss << "; ";
+			ss << k << " => " << to_string(v);
+		}
+		ss << ']';
+		return ss.str();
+	}
+	std::unordered_map<string_t, value_t>& items() { return _items; }
+
+protected:
+	class indexer : public object {
+		value_t& entry()				{ return _data->items()[_index]; }
+		std::shared_ptr<assoc_array>	_data;
+		string_t						_index;
+	public:
+		indexer(std::shared_ptr<assoc_array> arr, string_t index) : _index(index), _data(arr) {};
+		value_t get()					{ return entry(); }
+		void set(value_t value)			{ entry() = value; }
+		value_t call(value_t params)	{ return std::get<object_ptr>(entry())->call(params); }
+		value_t item(string_t item)		{ return std::get<object_ptr>(entry())->item(item); }
+		value_t index(value_t index)	{ return std::get<object_ptr>(entry())->index(index); }
+	};
+};
+
+
 }

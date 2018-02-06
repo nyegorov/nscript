@@ -22,7 +22,7 @@ struct op_null : op_base { };
 tm date2tm(date_t date)
 {
 	auto t = std::chrono::system_clock::to_time_t(date);
-	tm tm;
+	tm tm = { 0 };
 	localtime_s(&tm, &t);
 	return tm;
 }
@@ -115,7 +115,8 @@ date_t to_date(const string& s)
 	if(date[3] < 0 || date[3] > 23)			throw std::system_error(errc::syntax_error, "to_date");
 	if(date[4] < 0 || date[4] > 59)			throw std::system_error(errc::syntax_error, "to_date");
 	if(date[5] < 0 || date[5] > 59)			throw std::system_error(errc::syntax_error, "to_date");
-	tm tm;
+	tm tm = { 0 };
+	tm.tm_isdst = -1;
 	tm.tm_mday = date[0];
 	tm.tm_mon = date[1] - 1;
 	tm.tm_year = date[2] - 1900;
@@ -141,7 +142,6 @@ date_t to_date(value_t v)
 }
 
 #pragma endregion
-
 
 #pragma region Mathematical
 
@@ -404,7 +404,7 @@ struct op_new : op_base {
 
 struct op_statmt : op_base	{
 	const parser::token token = parser::token::stmt;
-	template<class X> value_t operator()(X x, std::monostate) { return { x }; }
+	//template<class X> value_t operator()(X x, std::monostate) { return { x }; }
 	template<class X, class Y> value_t operator()(X x, Y y)	{ return { y }; }
 };
 

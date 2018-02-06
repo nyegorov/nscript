@@ -77,7 +77,7 @@ struct i_object {
 	virtual value_t get()  = 0;							// return <object>
 	virtual void set(value_t value) = 0;				// <object> = value
 	virtual value_t call(value_t params) = 0;			// return <object>(params)
-	virtual value_t item(string_t item) = 0;				// return <object>.item
+	virtual value_t item(string_t item) = 0;			// return <object>.item
 	virtual value_t index(value_t index) = 0;			// return <object>[index]
 	virtual string_t print() const = 0;
 };
@@ -89,7 +89,7 @@ class context
 {
 public:
 	typedef std::unordered_set<string_t>			var_names;
-	context(const context *base, const var_names *vars = NULL);
+	context(const context *base, const var_names *vars = nullptr);
 	void push()		{_locals.push_back(vars_t());}
 	void pop()		{_locals.pop_back();}
 	value_t& get(string_t name, bool local = false);

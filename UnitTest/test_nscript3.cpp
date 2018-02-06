@@ -119,8 +119,8 @@ public:
 		Assert::AreEqual("3", eval("size([4,5,6])").c_str());
 		Assert::AreEqual("10", eval("a=[[1,2,[3,4]],[4,5,6]];a[0][1]=a[0][2][1]+a[1][2]").c_str());
 		Assert::AreEqual("bbb", eval("a=[];a=add(a,'aaa');a=add(a,'bbb');a=remove(a,0);a[0]").c_str());
-		//Assert::AreEqual("3", eval("m=new map; m['abc']=3; m['abc']").c_str());
-		//Assert::AreEqual("", eval("m=map; mm=new m; mm[0]").c_str());
+		Assert::AreEqual("3", eval("m=new hash; m['abc']=3; m['abc']").c_str());
+		Assert::AreEqual("", eval("m=hash; mm=new m; mm[0]").c_str());
 	}
 	TEST_METHOD(Functional)
 	{
@@ -188,9 +188,9 @@ public:
 		Assert::IsTrue(nscript3::errc::bad_param_count == eval_hr("sin(1,2)"));
 		Assert::IsTrue(std::errc::invalid_argument == eval_hr("x=1;;;;x[5]"));
 		Assert::IsTrue(std::errc::operation_not_supported == eval_hr("1[5]"));
-//		Assert::IsTrue(nscript3::errc::type_mismatch == eval_hr("(new map)[0]()"));
-//		Assert::IsTrue(nscript3::errc::type_mismatch == eval_hr("(new map)[0].x"));
-//		Assert::IsTrue(nscript3::errc::type_mismatch == eval_hr("(new map)[0][0]"));
+		Assert::AreEqual("bad variant access", eval("(new hash)[0]()").c_str());
+		Assert::AreEqual("bad variant access", eval("(new hash)[0].x").c_str());
+		Assert::AreEqual("bad variant access", eval("(new hash)[0][0]").c_str());
 		Assert::IsTrue(nscript3::errc::runtime_error == eval_hr("a=[];a[0x7fffffff]=1"));
 		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("1e2.3"));
 		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("1e2e3"));
