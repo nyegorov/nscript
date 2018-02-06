@@ -5,7 +5,7 @@
 namespace nscript3 {
 
 using std::string;
-enum class associativity { left, right };
+enum class associativity { left, right, none };
 enum class dereference { none, left, right, both };
 
 struct op_base {
@@ -125,6 +125,27 @@ struct op_not : op_base {
 
 #pragma region Logical
 
+struct comparator {
+	template<class X> int operator() (std::monostate, X) { return 1; }
+	template<class Y> int operator() (Y, std::monostate) { return -1; }
+	int operator() (std::monostate, std::monostate) { return 0; }
+	int operator() (int i1, int i2) { return i1 < i2 ? -1 : i1 > i2 ? 1 : 0; }
+	int operator() (int i1, double d2) { return i1 < d2 ? -1 : i1 > d2 ? 1 : 0; }
+	int operator() (double d1, int i2) { return d1 < i2 ? -1 : d1 > i2 ? 1 : 0; }
+	int operator() (double d1, double d2) { return d1 < d2 ? -1 : d1 > d2 ? 1 : 0; }
+	int operator() (string s1, string s2) { return s1.compare(s2); }
+	int operator() (object_ptr o1, object_ptr o2) {
+		if(auto a1 = to_array_if(o1), a2 = to_array_if(o2); a1 && a2) {
+			if(a1->size() != a2->size())	return operator()((int)a1->size(), (int)a2->size());
+			auto[p1, p2] = std::mismatch(a1->begin(), a1->end(), a2->begin(), a2->end());
+			if(p1 == a1->end() || p2 == a2->end())	return 0;
+			return std::visit(*this, *p1, *p2);
+		}
+		return o1 < o2 ? -1 : o1 > o2 ? 1 : 0;
+	}
+	template<class X, class Y> int operator()(X x, Y y) { throw nscript_error::type_mismatch; }
+};
+
 struct op_gt : op_base {
 	const parser::token token = parser::token::gt;
 	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x,y) > 0; }
@@ -201,11 +222,11 @@ struct op_mmx : op_xset<op_sub, parser::unaryminus> {
 	template<class X, class Y> value_t operator()(X x, Y y) { return op_xset::operator()(y, 1); }
 };
 struct op_xpp : op_xset<op_add, parser::unaryplus>  { 
-	const associativity assoc = associativity::left;
+	const associativity assoc = associativity::none;
 	template<class X, class Y> value_t operator()(X x, Y y) { auto v = *value_t{ x }; op_xset::operator()(x, 1); return v; }
 };
 struct op_xmm : op_xset<op_sub, parser::unaryminus> { 
-	const associativity assoc = associativity::left;
+	const associativity assoc = associativity::none;
 	template<class X, class Y> value_t operator()(X x, Y y) { auto v = *value_t{ x }; op_xset::operator()(x, 1); return v; }
 };
 struct op_addset : op_xset<op_add, parser::plusset>	{ using op_xset::operator(); };
@@ -243,7 +264,7 @@ struct op_index : op_base {
 struct op_item : op_base {
 	const parser::token token = parser::token::dot;
 	const dereference deref = dereference::right;
-	template<class Y> value_t operator()(object_ptr x, Y y) { return x->item(y); }
+	value_t operator()(object_ptr x, string_t y) { return x->item(y); }
 	using op_base::operator();
 };
 
@@ -257,7 +278,8 @@ struct op_new : op_base {
 
 struct op_statmt : op_base	{
 	const parser::token token = parser::token::stmt;
-	template<class X, class Y> value_t operator()(X, Y y) { return { y }; }
+	template<class X> value_t operator()(X x, std::monostate) { return { x }; }
+	template<class X, class Y> value_t operator()(X x, Y y)	{ return { y }; }
 };
 
 #pragma endregion      // ;, =, call, index, item, new
@@ -292,6 +314,7 @@ struct op_head : op_base {
 
 struct op_tail : op_base {
 	const parser::token token = parser::token::apo;
+	const associativity assoc = associativity::none;
 	template<class X, class Y> value_t operator()(X x, Y) { return value_t{}; }
 	template<class Y> value_t operator()(object_ptr x, Y) { 
 		if(auto pa = to_array_if(x); pa)	return pa->empty() ? value_t{} : std::make_shared<v_array>(pa->begin() + 1, pa->end()); 

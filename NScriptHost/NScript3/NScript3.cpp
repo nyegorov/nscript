@@ -11,8 +11,8 @@
 #include <time.h>
 #include <assert.h>
 #include "nscript3.h"
-#include "noperators.h"
 #include "nobjects.h"
+#include "noperators.h"
 
 #undef min
 #undef max
@@ -31,27 +31,6 @@ const std::error_category& nscript_category()
 
 std::error_code make_error_code(nscript_error e)			{ return std::error_code(static_cast<int>(e), nscript_category()); }
 std::error_condition make_error_condition(nscript_error e)	{ return std::error_condition(static_cast<int>(e), nscript_category()); }
-
-struct comparator {
-	template<class X> int operator() (std::monostate, X) { return 1; }
-	template<class Y> int operator() (Y, std::monostate) { return -1; }
-	int operator() (std::monostate, std::monostate)		 { return 0; }
-	int operator() (int i1, int i2) { return i1 < i2 ? -1 : i1 > i2 ? 1 : 0; }
-	int operator() (int i1, double d2) { return i1 < d2 ? -1 : i1 > d2 ? 1 : 0; }
-	int operator() (double d1, int i2) { return d1 < i2 ? -1 : d1 > i2 ? 1 : 0; }
-	int operator() (double d1, double d2) { return d1 < d2 ? -1 : d1 > d2 ? 1 : 0; }
-	int operator() (string s1, string s2) { return s1.compare(s2); }
-	int operator() (object_ptr o1, object_ptr o2) {
-		if(auto a1 = to_array_if(o1), a2 = to_array_if(o2); a1 && a2) {
-			if(a1->size() != a2->size())	return operator()((int)a1->size(), (int)a2->size());
-			auto[p1, p2] = std::mismatch(a1->begin(), a1->end(), a2->begin(), a2->end());
-			if(p1 == a1->end() || p2 == a2->end())	return 0;
-			return std::visit(*this, *p1, *p2);
-		}
-		return o1 < o2 ? -1 : o1 > o2 ? 1 : 0;
-	}
-	template<class X, class Y> int operator()(X x, Y y) { throw nscript_error::type_mismatch; }
-};
 
 bool is_empty(const value_t& v) { return v.index() == 0; }
 tm date2tm(date_t date)
@@ -314,14 +293,14 @@ value_t NScript::eval(std::string_view script, std::error_code& ec)
 {
 	value_t result;
 	_context.push();
-	//try	{
+	try	{
 		_parser.init(script);
 		parse<Script>(result, false);
 		if(_parser.get_token() != parser::end)	throw nscript_error::syntax_error;
 		return *result;
-	/*}
+	}
 	catch(nscript_error e)	 { ec = e; }
-	catch(std::errc e)		 { ec = make_error_code(e); }*/
+	catch(std::errc e)		 { ec = make_error_code(e); }
 	_context.pop();
 	return result;
 }
@@ -343,15 +322,15 @@ void NScript::parse_args(args_list& args, bool force_args) {
 }
 
 // Jump to position <state>, parse expression and return back
-template <NScript::Precedence level> void NScript::parse(parser::state state, value_t& result)
+template <NScript::Precedence P> void NScript::parse(parser::state state, value_t& result)
 {
 	auto current = _parser.get_state();
 	_parser.set_state(state);
-	parse<level>(result, false);
+	parse<P>(result, false);
 	_parser.set_state(current);
 }
 
-template <NScript::Precedence level, class OP> bool NScript::apply_op(OP op, value_t& result, bool skip)
+template <NScript::Precedence P, class OP> bool NScript::apply_op(OP op, value_t& result, bool skip)
 {
 	if(op.token == _parser.get_token()) {
 		if(op.token != parser::lpar && op.token != parser::lsquare && op.token != parser::dot)	_parser.next();
@@ -364,9 +343,8 @@ template <NScript::Precedence level, class OP> bool NScript::apply_op(OP op, val
 
 		// parse right-hand operand
 		if(op.token == parser::dot) { right = _parser.get_value(); _parser.next(); }	// special case for '.' operator
-		else if(op.assoc == associativity::right)	parse<level>(right, skip);			// right-associative operators
-		else if(op.token != parser::unaryplus && op.token != parser::unaryminus  && op.token != parser::apo && !(level == Script && _parser.get_token() == parser::rcurly))
-			parse<level+1>(right, skip);												// left-associative operators
+		else if(op.assoc == associativity::right)	parse<P>(right, skip);				// right-associative operators
+		else if(op.assoc == associativity::left)	parse<P+1>(right, skip);			// left-associative operators
 
 		if(op.deref == dereference::left  || op.deref == dereference::both)	*result;
 		if(op.deref == dereference::right || op.deref == dereference::both)	*right;
@@ -378,15 +356,15 @@ template <NScript::Precedence level, class OP> bool NScript::apply_op(OP op, val
 }
 
 
-template <NScript::Precedence level> void NScript::parse(value_t& result, bool skip)
+template <NScript::Precedence P> void NScript::parse(value_t& result, bool skip)
 {
 	// main parse loop
 	parser::token token = _parser.get_token();
 
 	// parse left-hand operand (for binary operators)
-	parse<(Precedence)(level + 1)>(result, skip);
+	parse<Precedence(P + 1)>(result, skip);
 	if(_parser.get_token() == parser::end)	return;
-	while(std::apply([&](auto ...op) { return (apply_op<level, decltype(op)>(op, result, skip) || ...); }, std::get<level>(s_operators)));
+	while(std::apply([&](auto ...op) { return (apply_op<P, decltype(op)>(op, result, skip) || ...); }, std::get<P>(s_operators)));
 }
 
 template<> void NScript::parse<NScript::Unary>(value_t& result, bool skip)
@@ -429,7 +407,7 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 		_parser.next();
 		break;
 	case parser::iffunc:	_parser.next(); parse<Assignment>(result, skip); parse_if<Assignment>(result, skip); break;
-	case parser::idiv:		parse_func(result, skip); break;
+	case parser::lambda:
 	case parser::func:		parse_func(result, skip); break;
 	case parser::forloop:	parse_for(result, skip); break;
 	case parser::object:	parse_obj(result, skip);break;
@@ -452,12 +430,12 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 }
 
 // Parse "if <cond> <true-part> [else <part>]" statement
-template<NScript::Precedence level> void NScript::parse_if(value_t& result, bool skip) {
+template<NScript::Precedence P> void NScript::parse_if(value_t& result, bool skip) {
 	bool cond = skip || to_int(*result);
-	parse<level>(result, !cond || skip);
+	parse<P>(result, !cond || skip);
 	if(_parser.get_token() == parser::ifelse || _parser.get_token() == parser::colon) {
 		_parser.next();
-		parse<level>(result, cond || skip);
+		parse<P>(result, cond || skip);
 	}
 }
 
@@ -499,7 +477,7 @@ void NScript::parse_for(value_t& result, bool skip) {
 void NScript::parse_func(value_t& result, bool skip)
 {
 	args_list args;
-	parse_args(args, _parser.get_token() == parser::idiv);
+	parse_args(args, _parser.get_token() == parser::lambda);
 	parser::state state = _parser.get_state();
 	if(_parser.get_token() == parser::end)	throw nscript_error::syntax_error;
 	// _varnames contains list of variables to be captured by function
@@ -549,7 +527,7 @@ parser::token parser::next()
 		case '-':	cc = peek(); _token = (cc == '-' ? read(), unaryminus : cc == '=' ? read(), minusset : minus); break;
 		case '*':	_token = peek() == '=' ? read(), mulset  : multiply;break;
 		case '/':	_token = peek() == '=' ? read(), divset  : divide;break;
-		case '\\':	_token = peek() == '=' ? read(), idivset : idiv;break;
+		case '\\':	_token = peek() == '=' ? read(), idivset : lambda;break;
 		case '%':	_token = mod;break;
 		case '^':	_token = pwr;break;
 		case '~':	_token = not;break;

@@ -15,7 +15,7 @@ public:
 	void set(value_t value) { _value = value; }
 	value_t create() const { return std::get<object_ptr>(_value)->create(); }
 	value_t call(value_t params) { return std::get<object_ptr>(_value)->call(params); }
-	value_t item(value_t item) { return std::get<object_ptr>(_value)->item(item); }
+	value_t item(string_t item) { return std::get<object_ptr>(_value)->item(item); }
 	value_t index(value_t index) {
 		if(auto pobj = std::get_if<object_ptr>(&_value); pobj)	return (*pobj)->index(index);
 		if(index == value_t{ 0 })	return { shared_from_this() };
@@ -62,9 +62,9 @@ protected:
 		indexer(std::shared_ptr<v_array> arr, int index) : _index(index), _data(arr) {};
 		value_t get() { return _data->items()[_index]; }
 		void set(value_t value) { _data->items()[_index] = value; }
-		value_t call(value_t params)	{ return std::visit(op_call(), _data->items()[_index], params); }
-		value_t item(value_t item)		{ return std::visit(op_item(), _data->items()[_index], item); }
-		value_t index(value_t index)	{ return std::visit(op_index(), _data->items()[_index], index); }
+		value_t call(value_t params)	{ return std::get<object_ptr>(_data->items()[_index])->call(params); }
+		value_t item(string_t item)		{ return std::get<object_ptr>(_data->items()[_index])->item(item); }
+		value_t index(value_t index)	{ return std::get<object_ptr>(_data->items()[_index])->index(index); }
 	};
 };
 
@@ -132,7 +132,7 @@ public:
 			process_args(args, params, _script);
 			_script.eval({});
 		}
-		value_t item(value_t item)	{ return _script.eval(std::get<string_t>(item)); }
+		value_t item(string_t item)	{ return _script.eval(item); }
 	};
 };
 

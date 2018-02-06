@@ -71,7 +71,7 @@ struct i_object {
 	virtual value_t get()  = 0;							// return <object>
 	virtual void set(value_t value) = 0;				// <object> = value
 	virtual value_t call(value_t params) = 0;			// return <object>(params)
-	virtual value_t item(value_t item) = 0;				// return <object>.item
+	virtual value_t item(string_t item) = 0;				// return <object>.item
 	virtual value_t index(value_t index) = 0;			// return <object>[index]
 	virtual string_t print() const = 0;
 };
@@ -100,7 +100,7 @@ class parser	{
 public:
 	using char_t = string_t::value_type;
 	using state = size_t;
-	enum token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,idiv,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon,apo,mdot};
+	enum token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,lambda,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon,apo,mdot};
 
 	parser();
 	void init(string_view expr)	{if(!expr.empty()) _content = expr; set_state(0);}
@@ -168,7 +168,7 @@ public:
 	value_t get()						{ return shared_from_this(); }
 	void set(value_t value)				{ throw std::errc::not_supported; }
 	value_t call(value_t params)		{ throw std::errc::not_supported; }
-	value_t item(value_t item)			{ throw std::errc::not_supported; }
+	value_t item(string_t item)			{ throw std::errc::not_supported; }
 	value_t index(value_t index)		{ throw std::errc::not_supported; }
 	string_t print() const				{ throw std::errc::not_supported; }
 	virtual ~object()					{};

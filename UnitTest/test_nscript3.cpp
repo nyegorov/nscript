@@ -73,6 +73,7 @@ public:
 	}
 	TEST_METHOD(Statements)
 	{
+		Assert::AreEqual("1", eval("1;;;").c_str());
 		Assert::AreEqual("1", eval("x=2; test = sub {x=1;}; test(); x").c_str());
 		Assert::AreEqual("2", eval("x=2; test = sub {my x; x=1;}; test(); x").c_str());
 		Assert::AreEqual("ok", eval("\
