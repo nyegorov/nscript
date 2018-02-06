@@ -17,9 +17,9 @@
 #undef min
 #undef max
 
-/*template<> struct std::less<nscript3::value_t> {
+template<> struct std::less<nscript3::value_t> {
 	bool operator()(const nscript3::value_t &v1, const nscript3::value_t& v2) { return std::visit(nscript3::comparator(), v1, v2) < 0; }
-};*/
+};
 
 namespace nscript3	{
 
@@ -29,19 +29,8 @@ const std::error_category& nscript_category()
 	return instance;
 }
 
-std::error_code make_error_code(nscript_error e)			{ return std::error_code(static_cast<int>(e), nscript_category()); }
-std::error_condition make_error_condition(nscript_error e)	{ return std::error_condition(static_cast<int>(e), nscript_category()); }
-
-bool is_empty(const value_t& v) { return v.index() == 0; }
-tm date2tm(date_t date)
-{
-	auto t = std::chrono::system_clock::to_time_t(date);
-	tm tm;
-	localtime_s(&tm, &t);
-	return tm;
-}
-
-class v_array;
+std::error_code make_error_code(errc e)				{ return std::error_code(static_cast<int>(e), nscript_category()); }
+std::error_condition make_error_condition(errc e)	{ return std::error_condition(static_cast<int>(e), nscript_category()); }
 
 params_t* to_array_if(const object_ptr& o)
 {
@@ -61,112 +50,6 @@ array_ptr to_array(const value_t& v)
 		if(auto parr = std::dynamic_pointer_cast<v_array>(*pobj); parr)	return parr;
 	return is_empty(v) ? std::make_shared<v_array>() 
 					   : std::make_shared<v_array>(std::initializer_list<value_t>{ v });
-}
-
-std::string to_string(value_t v)
-{
-	struct print_value {
-		string operator() (std::monostate)	{ return ""; }
-		string operator() (int i) { return std::to_string(i); }
-		string operator() (double d) {
-			std::stringstream ss;
-			ss << d;
-			return ss.str();
-		}
-		string operator() (string s) { return s; }
-		string operator() (nscript3::date_t dt) {
-			auto tm = date2tm(dt);
-			std::stringstream ss;
-			bool is_date = !(tm.tm_mday == 1 && tm.tm_mon == 0 && tm.tm_year == 70);
-			bool is_time = tm.tm_hour || tm.tm_min || tm.tm_sec;
-			if(is_date)		ss << std::put_time(&tm, "%d.%m.%Y");
-			if(is_time)		ss << (is_date ? " " : "") << std::put_time(&tm, tm.tm_sec ? "%H:%M:%S" : "%H:%M");
-			return ss.str();
-		}
-		string operator() (nscript3::object_ptr o) { 
-			auto v = o->get(); 
-			if(auto po = std::get_if<object_ptr>(&v); *po != o)	return to_string(v); 
-			return o->print();
-		}
-	};
-
-	return std::visit(print_value(), v);
-}
-
-int to_int(value_t v)
-{
-	struct to_int_t {
-		int operator() (std::monostate)	{ return 0; }
-		int operator() (int i)			{ return i; }
-		int operator() (double d)		{ return (int)(d + 0.5); }
-		int operator() (string s)		{ return std::stoi( s ); }
-		int operator() (date_t dt)		{ throw nscript_error::type_mismatch; }
-		int operator() (object_ptr o)	{ throw nscript_error::type_mismatch; }
-	};
-	return std::visit(to_int_t(), v);
-}
-
-double to_double(value_t v)
-{
-	struct to_double_t {
-		double operator() (std::monostate) { return 0.; }
-		double operator() (int i) { return i; }
-		double operator() (double d) { return d; }
-		double operator() (string s) { return std::stod(s); }
-		double operator() (date_t dt) { throw nscript_error::type_mismatch; }
-		double operator() (object_ptr o) { throw nscript_error::type_mismatch; }
-	};
-	return std::visit(to_double_t(), v);
-}
-
-date_t to_date(const string& s)
-{
-	enum date_stage { day = 0, mon, year, hour, min, sec } stage = day;
-	int date[6] = { 0 };
-	for(auto c : s) {
-		if(isdigit(c)) {
-			date[stage] = date[stage] * 10 + (c - '0');
-		} else if(c == '.') {
-			if(stage > year)					throw nscript_error::syntax_error;
-			stage = date_stage(stage + 1);
-		} else if(c == ':') {
-			if(stage == day)	date[3] = date[0], date[0] = 1, date[1] = 1, date[2] = 1970, stage = hour;
-			if(stage < hour || stage == sec)	throw nscript_error::syntax_error;
-			stage = date_stage(stage + 1);
-		} else if(c == ' ') {
-			if(stage != year && stage != hour)	throw nscript_error::syntax_error;
-			stage = hour;
-		} else	break;
-	};
-	if(date[2] < 100)	date[2] += date[2] < 50 ? 2000 : 1900;
-	if(date[0] <= 0 || date[0] > 31)		throw nscript_error::syntax_error;
-	if(date[1] <= 0 || date[1] > 12)		throw nscript_error::syntax_error;
-	if(date[2] < 1900 || date[2] > 9999)	throw nscript_error::syntax_error;
-	if(date[3] < 0 || date[3] > 23)			throw nscript_error::syntax_error;
-	if(date[4] < 0 || date[4] > 59)			throw nscript_error::syntax_error;
-	if(date[5] < 0 || date[5] > 59)			throw nscript_error::syntax_error;
-	tm tm;
-	tm.tm_mday = date[0];
-	tm.tm_mon = date[1] - 1;
-	tm.tm_year = date[2] - 1900;
-	tm.tm_hour = date[3];
-	tm.tm_min = date[4];
-	tm.tm_sec = date[5];
-	auto time = std::mktime(&tm);
-	return std::chrono::system_clock::from_time_t(time);
-}
-
-date_t to_date(value_t v)
-{
-	struct to_date_t {
-		date_t operator() (std::monostate) { throw nscript_error::type_mismatch; }
-		date_t operator() (int) { throw nscript_error::type_mismatch; }
-		date_t operator() (double) { throw nscript_error::type_mismatch; }
-		date_t operator() (string s) { return to_date(s); }
-		date_t operator() (date_t dt) { return dt; }
-		date_t operator() (object_ptr) { throw nscript_error::type_mismatch; }
-	};
-	return std::visit(to_date_t(), v);
 }
 
 // Globals
@@ -289,18 +172,17 @@ static auto s_operators = std::make_tuple(
 	std::tuple<op_xpp, op_xmm, op_call, op_index, op_item, op_tail>()
 );
 
-value_t NScript::eval(std::string_view script, std::error_code& ec)
+value_t NScript::eval(std::string_view script)
 {
 	value_t result;
 	_context.push();
 	try	{
 		_parser.init(script);
 		parse<Script>(result, false);
-		if(_parser.get_token() != parser::end)	throw nscript_error::syntax_error;
-		return *result;
+		if(_parser.get_token() != parser::end)	throw std::system_error(errc::syntax_error, "eval");
+		*result;
 	}
-	catch(nscript_error e)	 { ec = e; }
-	catch(std::errc e)		 { ec = make_error_code(e); }
+	catch(...) { result = std::current_exception();	}
 	_context.pop();
 	return result;
 }
@@ -398,7 +280,7 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 	switch(token) {
 	case parser::value:		if(!skip)	result = _parser.get_value(); _parser.next(); break;
 	case parser::my:
-		if(_parser.next() != parser::name)	throw nscript_error::syntax_error;
+		if(_parser.next() != parser::name)	throw std::system_error(errc::syntax_error, "'my'");
 		local = true;
 		[[fallthrough]];
 	case parser::name:
@@ -425,7 +307,7 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 		_context.pop();
 		_parser.check_pair(token);
 		break;
-	case parser::end:		throw nscript_error::unexpected_eof;
+	case parser::end:		throw std::system_error(errc::unexpected_eof);
 	}
 }
 
@@ -443,23 +325,23 @@ template<NScript::Precedence P> void NScript::parse_if(value_t& result, bool ski
 void NScript::parse_for(value_t& result, bool skip) {
 	parser::state condition, increment, body;
 	_parser.next();
-	if(_parser.get_token() != parser::lpar)		throw nscript_error::syntax_error;
+	if(_parser.get_token() != parser::lpar)		throw std::system_error(errc::syntax_error, "'for'");
 	_parser.next();
 	if(_parser.get_token() != parser::stmt) {	// start expression
 		parse<Statement>(result, skip);
-		if(_parser.get_token() != parser::stmt)	throw nscript_error::syntax_error;
+		if(_parser.get_token() != parser::stmt)	throw std::system_error(errc::syntax_error, "'for'");
 	}
 	_parser.next();
 	condition = _parser.get_state();
 	if(_parser.get_token() != parser::stmt)	{	// exit condition
 		parse<Statement>(result, true);
-		if(_parser.get_token() != parser::stmt)	throw nscript_error::syntax_error;
+		if(_parser.get_token() != parser::stmt)	throw std::system_error(errc::syntax_error, "'for'");
 	}
 	_parser.next();
 	increment = _parser.get_state();
 	if(_parser.get_token() != parser::rpar)	{	// increment
 		parse<Statement>(result, true);
-		if(_parser.get_token() != parser::rpar)	throw nscript_error::syntax_error;
+		if(_parser.get_token() != parser::rpar)	throw std::system_error(errc::syntax_error, "'for'");
 	}
 	_parser.next();
 	body = _parser.get_state();
@@ -479,7 +361,7 @@ void NScript::parse_func(value_t& result, bool skip)
 	args_list args;
 	parse_args(args, _parser.get_token() == parser::lambda);
 	parser::state state = _parser.get_state();
-	if(_parser.get_token() == parser::end)	throw nscript_error::syntax_error;
+	if(_parser.get_token() == parser::end)	throw std::system_error(errc::syntax_error, "'fn'");
 	// _varnames contains list of variables to be captured by function
 	if(!skip)	_varnames.clear();
 	parse<Assignment>(result, true);
@@ -493,7 +375,7 @@ void NScript::parse_obj(value_t& result, bool skip)
 	parse_args(args, false);
 	if(_parser.get_token() == parser::lcurly)	_parser.next();
 	parser::state state = _parser.get_state();
-	if(_parser.get_token() == parser::end)	throw nscript_error::syntax_error;
+	if(_parser.get_token() == parser::end)	throw std::system_error(errc::syntax_error, "'object'");
 	// _varnames contains list of variables to be captured by object
 	if(!skip)	_varnames.clear();
 	parse<Script>(result, true);
@@ -580,7 +462,7 @@ void parser::read_number(char_t c)
 		if(isdigit(c))	{
 			char_t v = c - '0';
 			if(stage == nsint || stage == nshex) {
-				if(m > (INT_MAX - v) / base)	throw std::errc::value_too_large;
+				if(m > (INT_MAX - v) / base)	throw std::system_error(std::make_error_code(std::errc::value_too_large), "number");
 				m = m * base + v;
 			}
 			else if(stage == nsexp)		stage = nspwr;
@@ -591,7 +473,7 @@ void parser::read_number(char_t c)
 			if(stage == nspwr)		e2 = e2 * 10  + v;
 		}	else if(isxdigit(c) && stage == nshex)		{
 			char_t v = 10 + (toupper(c) - 'A');
-			if(m > (INT_MAX - v) / base)	throw std::errc::value_too_large;
+			if(m > (INT_MAX - v) / base)	throw std::system_error(std::make_error_code(std::errc::value_too_large), "number");
 			m = m * base + v;
 		}	else if(c == '.')		{
 			if(stage > nsint)	break;
@@ -605,7 +487,7 @@ void parser::read_number(char_t c)
 		}	else	break;
 	};
 	back();
-	if(stage == nsexp)	throw nscript_error::syntax_error;
+	if(stage == nsexp)	throw std::system_error(errc::syntax_error, "number");
 	if(stage == nsint || stage == nshex)	_value = m;							// integer
 	else									_value = m * pow(10., e1+esign*e2);	// floating-point
 	_token = parser::value;
@@ -616,7 +498,7 @@ void parser::read_string(char_t quote)	{
 	string_t temp;
 	for(;;temp += read())	{
 		state endpos = _content.find(quote, _pos);
-		if(endpos == string_t::npos)	throw nscript_error::missing_character;
+		if(endpos == string_t::npos)	throw std::system_error(errc::missing_character, string_t("'") + quote + "'");
 		temp += _content.substr(_pos, endpos-_pos).c_str();
 		_pos = endpos+1;
 		if(peek() != quote)	break;
@@ -627,7 +509,7 @@ void parser::read_string(char_t quote)	{
 // Parse object name from input stream
 void parser::read_name(char_t c)	
 {
-	if(!isalpha(unsigned char(c)) && c != '@' && c != '_')		throw nscript_error::syntax_error;
+	if(!isalpha(unsigned char(c)) && c != '@' && c != '_')		throw std::system_error(errc::syntax_error, "name");
 	_name = c;
 	while(isalnum(unsigned char(c = read())) || c == '_')	_name += c;
 	back();
@@ -635,9 +517,9 @@ void parser::read_name(char_t c)
 
 void parser::check_pair(parser::token token)
 {
-	if(token == lpar && _token != rpar)			throw nscript_error::missing_character;
-	if(token == lsquare && _token != rsquare)	throw nscript_error::missing_character;
-	if(token == lcurly && _token != rcurly)		throw nscript_error::missing_character;
+	if(token == lpar && _token != rpar)			throw std::system_error(errc::missing_character, "')'");
+	if(token == lsquare && _token != rsquare)	throw std::system_error(errc::missing_character, "']'");
+	if(token == lcurly && _token != rcurly)		throw std::system_error(errc::missing_character, "'}'");
 	if(token == lpar || token == lsquare || token == lcurly)	next();
 }
 

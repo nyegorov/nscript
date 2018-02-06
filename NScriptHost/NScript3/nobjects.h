@@ -6,25 +6,6 @@ namespace nscript3 {
 
 class object;
 
-// Class that represents script variables
-class variable : public object {
-	value_t			_value;
-public:
-	variable() : _value() {}
-	value_t get() { return _value; }
-	void set(value_t value) { _value = value; }
-	value_t create() const { return std::get<object_ptr>(_value)->create(); }
-	value_t call(value_t params) { return std::get<object_ptr>(_value)->call(params); }
-	value_t item(string_t item) { return std::get<object_ptr>(_value)->item(item); }
-	value_t index(value_t index) {
-		if(auto pobj = std::get_if<object_ptr>(&_value); pobj)	return (*pobj)->index(index);
-		if(index == value_t{ 0 })	return { shared_from_this() };
-		throw std::errc::invalid_argument;
-	}
-	string_t print() const { return std::get<object_ptr>(_value)->print(); }
-};
-
-
 // Class that represents arrays
 class v_array : public object {
 	std::vector<value_t>	_items;
@@ -38,8 +19,11 @@ public:
 		return shared_from_this();
 	}
 	value_t index(value_t index) {
-		if(auto pi = std::get_if<int>(&index))	return std::make_shared<indexer>(std::static_pointer_cast<v_array>(shared_from_this()), *pi);
-		throw std::errc::invalid_argument;
+		if(auto pi = std::get_if<int>(&index)) {
+			if(_items.size() < size_t(*pi))	_items.resize(*pi);
+			return std::make_shared<indexer>(std::static_pointer_cast<v_array>(shared_from_this()), *pi);
+		}
+		throw std::system_error(std::make_error_code(std::errc::invalid_argument), "'index'");
 	}
 	string_t print() const {
 		std::stringstream ss;
@@ -56,16 +40,42 @@ public:
 
 protected:
 	class indexer : public object {
+		value_t& entry(bool resize = false) { 
+			if(_data->items().size() <= size_t(_index)) {
+				if(resize)	_data->items().resize(_index + 1);
+				else		throw std::system_error(std::make_error_code(std::errc::invalid_argument), "'index'");
+			}
+			return _data->items()[_index];
+		}
 		std::shared_ptr<v_array>	_data;
-		int						_index;
+		int							_index;
 	public:
 		indexer(std::shared_ptr<v_array> arr, int index) : _index(index), _data(arr) {};
-		value_t get() { return _data->items()[_index]; }
-		void set(value_t value) { _data->items()[_index] = value; }
-		value_t call(value_t params)	{ return std::get<object_ptr>(_data->items()[_index])->call(params); }
-		value_t item(string_t item)		{ return std::get<object_ptr>(_data->items()[_index])->item(item); }
-		value_t index(value_t index)	{ return std::get<object_ptr>(_data->items()[_index])->index(index); }
+		value_t get()					{ return entry(); }
+		void set(value_t value)			{ entry(true) = value; }
+		value_t call(value_t params)	{ return std::get<object_ptr>(entry())->call(params); }
+		value_t item(string_t item)		{ return std::get<object_ptr>(entry())->item(item); }
+		value_t index(value_t index)	{ return std::get<object_ptr>(entry())->index(index); }
 	};
+};
+
+// Class that represents script variables
+class variable : public object {
+	value_t			_value;
+public:
+	variable() : _value() {}
+	value_t get() { return _value; }
+	void set(value_t value) { _value = value; }
+	value_t create() const { return std::get<object_ptr>(_value)->create(); }
+	value_t call(value_t params) { return std::get<object_ptr>(_value)->call(params); }
+	value_t item(string_t item) { return std::get<object_ptr>(_value)->item(item); }
+	value_t index(value_t index) {
+		if(auto pobj = std::get_if<object_ptr>(&_value))	return (*pobj)->index(index);
+		auto a = to_array(_value);
+		_value = a;
+		return a->index(index);
+	}
+	string_t print() const { return std::get<object_ptr>(_value)->print(); }
 };
 
 // Built-in functions
@@ -74,11 +84,11 @@ public:
 	builtin_function(int count, FN func) : _count(count), _func(func) {}
 	value_t call(value_t params) {
 		if(auto pa = to_array_if(params); pa) {
-			if(_count >= 0 && _count != pa->size())	throw nscript_error::bad_param_count;
+			if(_count >= 0 && _count != pa->size())	throw std::system_error(errc::bad_param_count, "'fn'");
 			return _func(*pa);
 		} else if(is_empty(params) && _count <= 0)	return _func({});
 		else if(_count < 0 || _count == 1)			return _func({ params });
-		else										throw nscript_error::bad_param_count;
+		else										throw std::system_error(errc::bad_param_count, "'fn'");
 	}
 protected:
 	const int			_count;
@@ -94,7 +104,7 @@ void process_args(const args_list& args, const value_t& params, NScript& script)
 		script.add(args.front(), params);
 	} else {
 		auto a = to_array(params);
-		if(args.size() != a->items().size())	throw nscript_error::bad_param_count;
+		if(args.size() != a->items().size())	throw std::system_error(errc::bad_param_count, "args");
 		for(int i = (int)args.size() - 1; i >= 0; i--)	script.add(args[i], a->items()[i]);
 	}
 }
@@ -109,7 +119,9 @@ public:
 	value_t call(value_t params) {
 		NScript script(_body, &_context);
 		process_args(_args, params, script);
-		return script.eval({});
+		auto res = script.eval({});
+		if(auto pe = failed(res); pe)	std::rethrow_exception(pe);
+		return res;
 	}
 };
 
@@ -130,7 +142,8 @@ public:
 	public:
 		instance(string_view body, const context *pcontext, const args_list& args, value_t params) : _script(body, pcontext) {
 			process_args(args, params, _script);
-			_script.eval({});
+			//auto res = _script.eval({});
+			_script.parse<NScript::Script>(value_t{}, false);
 		}
 		value_t item(string_t item)	{ return _script.eval(item); }
 	};

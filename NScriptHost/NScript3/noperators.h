@@ -12,10 +12,136 @@ struct op_base {
 	const parser::token token = parser::token::end;
 	const associativity assoc = associativity::left;
 	const dereference deref   = dereference::both;
-	template<class X, class Y> value_t operator()(X x, Y y) { throw std::errc::operation_not_supported; return { 0 }; }
+	template<class X, class Y> value_t operator()(X x, Y y) { throw std::system_error(std::make_error_code(std::errc::operation_not_supported), "op_base"); }
 };
 
 struct op_null : op_base { };
+
+#pragma region Conversion
+
+tm date2tm(date_t date)
+{
+	auto t = std::chrono::system_clock::to_time_t(date);
+	tm tm;
+	localtime_s(&tm, &t);
+	return tm;
+}
+
+std::string to_string(value_t v)
+{
+	struct print_value {
+		string operator() (std::monostate) { return ""; }
+		string operator() (int i) { return std::to_string(i); }
+		string operator() (double d) {
+			std::stringstream ss;
+			ss << d;
+			return ss.str();
+		}
+		string operator() (string s) { return s; }
+		string operator() (nscript3::date_t dt) {
+			auto tm = date2tm(dt);
+			std::stringstream ss;
+			bool is_date = !(tm.tm_mday == 1 && tm.tm_mon == 0 && tm.tm_year == 70);
+			bool is_time = tm.tm_hour || tm.tm_min || tm.tm_sec;
+			if(is_date)		ss << std::put_time(&tm, "%d.%m.%Y");
+			if(is_time)		ss << (is_date ? " " : "") << std::put_time(&tm, tm.tm_sec ? "%H:%M:%S" : "%H:%M");
+			return ss.str();
+		}
+		string operator() (nscript3::object_ptr o) {
+			auto v = o->get();
+			if(auto po = std::get_if<object_ptr>(&v); *po != o)	return to_string(v);
+			return o->print();
+		}
+		string operator() (std::exception_ptr pex) {
+			try { std::rethrow_exception(pex); } catch(const std::exception& ex) { return ex.what(); }
+			return "unknown exception";
+		}
+	};
+
+	return std::visit(print_value(), v);
+}
+
+int to_int(value_t v)
+{
+	struct to_int_t {
+		int operator() (std::monostate) { return 0; }
+		int operator() (int i) { return i; }
+		int operator() (double d) { return (int)(d + 0.5); }
+		int operator() (string s) { return std::stoi(s); }
+		int operator() (date_t dt) { throw std::system_error(errc::type_mismatch, "to_int"); }
+		int operator() (object_ptr o) { throw std::system_error(errc::type_mismatch, "to_int"); }
+		int operator() (std::exception_ptr) { throw std::system_error(errc::type_mismatch, "to_int"); }
+	};
+	return std::visit(to_int_t(), v);
+}
+
+double to_double(value_t v)
+{
+	struct to_double_t {
+		double operator() (std::monostate) { return 0.; }
+		double operator() (int i) { return i; }
+		double operator() (double d) { return d; }
+		double operator() (string s) { return std::stod(s); }
+		double operator() (date_t dt) { throw std::system_error(errc::type_mismatch, "to_double"); }
+		double operator() (object_ptr o) { throw std::system_error(errc::type_mismatch, "to_double"); }
+		double operator() (std::exception_ptr) { throw std::system_error(errc::type_mismatch, "to_double"); }
+	};
+	return std::visit(to_double_t(), v);
+}
+
+date_t to_date(const string& s)
+{
+	enum date_stage { day = 0, mon, year, hour, min, sec } stage = day;
+	int date[6] = { 0 };
+	for(auto c : s) {
+		if(isdigit(c)) {
+			date[stage] = date[stage] * 10 + (c - '0');
+		} else if(c == '.') {
+			if(stage > year)					throw std::system_error(errc::syntax_error, "to_date");
+			stage = date_stage(stage + 1);
+		} else if(c == ':') {
+			if(stage == day)	date[3] = date[0], date[0] = 1, date[1] = 1, date[2] = 1970, stage = hour;
+			if(stage < hour || stage == sec)	throw std::system_error(errc::syntax_error, "to_date");
+			stage = date_stage(stage + 1);
+		} else if(c == ' ') {
+			if(stage != year && stage != hour)	throw std::system_error(errc::syntax_error, "to_date");
+			stage = hour;
+		} else	break;
+	};
+	if(date[2] < 100)	date[2] += date[2] < 50 ? 2000 : 1900;
+	if(date[0] <= 0 || date[0] > 31)		throw std::system_error(errc::syntax_error, "to_date");
+	if(date[1] <= 0 || date[1] > 12)		throw std::system_error(errc::syntax_error, "to_date");
+	if(date[2] < 1900 || date[2] > 9999)	throw std::system_error(errc::syntax_error, "to_date");
+	if(date[3] < 0 || date[3] > 23)			throw std::system_error(errc::syntax_error, "to_date");
+	if(date[4] < 0 || date[4] > 59)			throw std::system_error(errc::syntax_error, "to_date");
+	if(date[5] < 0 || date[5] > 59)			throw std::system_error(errc::syntax_error, "to_date");
+	tm tm;
+	tm.tm_mday = date[0];
+	tm.tm_mon = date[1] - 1;
+	tm.tm_year = date[2] - 1900;
+	tm.tm_hour = date[3];
+	tm.tm_min = date[4];
+	tm.tm_sec = date[5];
+	auto time = std::mktime(&tm);
+	return std::chrono::system_clock::from_time_t(time);
+}
+
+date_t to_date(value_t v)
+{
+	struct to_date_t {
+		date_t operator() (std::monostate) { throw std::system_error(errc::type_mismatch, "to_date"); }
+		date_t operator() (int) { throw std::system_error(errc::type_mismatch, "to_date"); }
+		date_t operator() (double) { throw std::system_error(errc::type_mismatch, "to_date"); }
+		date_t operator() (string s) { return to_date(s); }
+		date_t operator() (date_t dt) { return dt; }
+		date_t operator() (object_ptr) { throw std::system_error(errc::type_mismatch, "to_date"); }
+		date_t operator() (std::exception_ptr) { throw std::system_error(errc::type_mismatch, "to_date"); }
+	};
+	return std::visit(to_date_t(), v);
+}
+
+#pragma endregion
+
 
 #pragma region Mathematical
 
@@ -143,7 +269,7 @@ struct comparator {
 		}
 		return o1 < o2 ? -1 : o1 > o2 ? 1 : 0;
 	}
-	template<class X, class Y> int operator()(X x, Y y) { throw nscript_error::type_mismatch; }
+	template<class X, class Y> int operator()(X x, Y y) { throw std::system_error(errc::type_mismatch, "compare"); }
 };
 
 struct op_gt : op_base {
@@ -206,7 +332,7 @@ struct op_xset : op_base {
 	const parser::token token = TOK;
 	const associativity assoc = associativity::right;
 	const dereference deref = dereference::right;
-	template<class X, class Y> value_t operator()(X x, Y y) { throw nscript_error::missing_lval; return { 0 }; }
+	template<class X, class Y> value_t operator()(X x, Y y) { throw std::system_error(errc::missing_lval, "xset"); }
 	template<class Y> value_t operator()(object_ptr x, Y y) { 
 		auto v = std::visit([this, y](auto x) { return OP().operator()(x, y); }, x->get());
 		return x->set(v), v; 
@@ -308,7 +434,7 @@ struct op_head : op_base {
 	template<class X> value_t operator()(X, object_ptr y) { 
 		if(auto pa = std::dynamic_pointer_cast<v_array>(y); pa) 
 			return pa->items().empty() ? value_t{} : pa->items().front(); 
-		throw std::errc::invalid_argument;
+		throw std::system_error(std::make_error_code(std::errc::invalid_argument), "op_head");
 	}
 };
 
@@ -318,7 +444,7 @@ struct op_tail : op_base {
 	template<class X, class Y> value_t operator()(X x, Y) { return value_t{}; }
 	template<class Y> value_t operator()(object_ptr x, Y) { 
 		if(auto pa = to_array_if(x); pa)	return pa->empty() ? value_t{} : std::make_shared<v_array>(pa->begin() + 1, pa->end()); 
-		throw std::errc::invalid_argument;
+		throw std::system_error(std::make_error_code(std::errc::invalid_argument), "op_tail");
 	}
 };
 

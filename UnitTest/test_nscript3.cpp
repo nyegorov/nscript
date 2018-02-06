@@ -16,44 +16,18 @@ TEST_CLASS(NScript3Test)
 {
 	std::error_code eval_hr(const char *expr) {
 		nscript3::NScript ns;
-//		ns.AddObject(L"map", (nscript::IHash*)(new nscript::Hash()));
-//		ns.AddObject(TEXT("createobject"), new nscript::CreateObject());
-		std::error_code ec;
-		ns.eval(expr, ec);
-		return ec;
+		auto v = ns.eval(expr);
+		try {
+			if(auto pe = failed(v); pe)	std::rethrow_exception(pe);
+		} 
+		catch(const std::system_error& se)	{ return se.code(); }
+		catch(...)							{ return nscript3::errc::runtime_error; }
+		return nscript3::errc::runtime_error;
 	}
 
 	string eval(const char *expr) {
 		nscript3::NScript ns;
-		string		res;
-		//ns.AddObject(L"map", (nscript::IHash*)(new nscript::Hash()));
-		//ns.AddObject(TEXT("createobject"), new nscript::CreateObject());
-
-		error_code ec;
-		auto v = ns.eval(expr, ec);
-		if(!ec)	return to_string(v);
-		else	return ec.message();
-
-
-/*		if(FAILED(hr)) {
-			IErrorInfoPtr pei;
-			GetErrorInfo(0, &pei);
-			_com_error e(hr, pei, true);
-			return (LPCSTR)e.Description();
-		}
-		try {
-			if(V_VT(&v) & VT_ARRAY) {
-				nscript::SafeArray sa(v);
-				res = '[';
-				for(int i = 0; i<sa.Count(); i++) {
-					if(i)	res += "; ";
-					res += bstr_t(sa[i]);
-				}
-				res += ']';
-			} else
-				res = (LPCSTR)bstr_t(v);
-		} catch(...) { res = "Type mismatch."; }
-		return res;*/
+		return to_string(ns.eval(expr));
 	}
 
 public:
@@ -198,29 +172,28 @@ public:
 	}
 	TEST_METHOD(Errors)
 	{
-		Assert::AreEqual("Missing ')' character", eval("(1,2").c_str());
-		Assert::IsTrue(nscript3::nscript_error::missing_character == eval_hr("(1,2"));
-		Assert::IsTrue(nscript3::nscript_error::missing_character == eval_hr("{c=1"));
-		Assert::IsTrue(nscript3::nscript_error::missing_character == eval_hr("[1,2"));
-		//Assert::AreEqual(E_NS_SYNTAXERROR,	eval_hr("5+"));
-		//Assert::AreEqual(DISP_E_UNKNOWNNAME, eval_hr("x+2"));
-		//Assert::AreEqual(E_NS_TOOMANYITERATIONS, eval_hr("for(;1;) {1}"));
-		Assert::IsTrue(nscript3::nscript_error::syntax_error == eval_hr("object(x) {"));
-		Assert::IsTrue(nscript3::nscript_error::syntax_error == eval_hr("sub(x,$);"));
-/*		Assert::AreEqual(E_NOTIMPL, eval_hr("(new object {})(0)"));
-		Assert::AreEqual(E_NOTIMPL, eval_hr("(new object {})=1"));
-		Assert::AreEqual(E_NOTIMPL, eval_hr("(new object {})[0]"));
-		Assert::AreEqual(E_NOTIMPL, eval_hr("new (new object)"));
-		Assert::AreEqual(DISP_E_BADPARAMCOUNT, eval_hr("new (object(x,y) {})()"));
-		Assert::AreEqual(DISP_E_BADPARAMCOUNT, eval_hr("sin(1,2)"));
-		Assert::AreEqual(DISP_E_BADINDEX, eval_hr("x=1;;;;x[5]"));
-		Assert::AreEqual(DISP_E_BADINDEX, eval_hr("1[5]"));
-		Assert::AreEqual(DISP_E_TYPEMISMATCH, eval_hr("(new map)[0]()"));
-		Assert::AreEqual(DISP_E_TYPEMISMATCH, eval_hr("(new map)[0].x"));
-		Assert::AreEqual(DISP_E_TYPEMISMATCH, eval_hr("(new map)[0][0]"));
-		Assert::AreEqual(E_OUTOFMEMORY, eval_hr("a=[];a[0x7fffffff]=1"));
-		Assert::AreEqual(E_NS_SYNTAXERROR, eval_hr("1e2.3"));
-		Assert::AreEqual(E_NS_SYNTAXERROR, eval_hr("1e2e3"));*/
+		Assert::AreEqual("')': missing character", eval("(1,2").c_str());
+		Assert::IsTrue(nscript3::errc::missing_character == eval_hr("(1,2"));
+		Assert::IsTrue(nscript3::errc::missing_character == eval_hr("{c=1"));
+		Assert::IsTrue(nscript3::errc::missing_character == eval_hr("[1,2"));
+//		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("5+"));
+//		Assert::IsTrue(nscript3::errc::unknown_var == eval_hr("x+2"));
+		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("object(x) {"));
+		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("sub(x,$);"));
+		Assert::IsTrue(std::errc::not_supported == eval_hr("(new object {})(0)"));
+		Assert::IsTrue(std::errc::not_supported == eval_hr("(new object {})=1"));
+		Assert::IsTrue(std::errc::not_supported == eval_hr("(new object {})[0]"));
+		Assert::IsTrue(std::errc::not_supported == eval_hr("new (new object)"));
+		Assert::IsTrue(nscript3::errc::bad_param_count == eval_hr("new (object(x,y) {})()"));
+		Assert::IsTrue(nscript3::errc::bad_param_count == eval_hr("sin(1,2)"));
+		Assert::IsTrue(std::errc::invalid_argument == eval_hr("x=1;;;;x[5]"));
+		Assert::IsTrue(std::errc::operation_not_supported == eval_hr("1[5]"));
+//		Assert::IsTrue(nscript3::errc::type_mismatch == eval_hr("(new map)[0]()"));
+//		Assert::IsTrue(nscript3::errc::type_mismatch == eval_hr("(new map)[0].x"));
+//		Assert::IsTrue(nscript3::errc::type_mismatch == eval_hr("(new map)[0][0]"));
+		Assert::IsTrue(nscript3::errc::runtime_error == eval_hr("a=[];a[0x7fffffff]=1"));
+		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("1e2.3"));
+		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("1e2e3"));
 		Assert::IsTrue(std::errc::value_too_large == eval_hr("0x1ffffffffffffffff"));
 		Assert::IsTrue(std::errc::value_too_large == eval_hr("999999999999999999999999999"));
 	}

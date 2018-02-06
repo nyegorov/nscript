@@ -21,30 +21,35 @@
 
 namespace nscript3	{
 
-enum class nscript_error {runtime_error = 1001, unexpected_eof, missing_character, unknown_var, missing_lval, syntax_error, bad_param_count, type_mismatch };
+class nscript_error : public std::system_error
+{
+	using system_error::system_error;
+};
+
+enum class errc {runtime_error = 1001, unexpected_eof, missing_character, unknown_var, missing_lval, syntax_error, bad_param_count, type_mismatch };
 
 class nscript_category_impl : public std::error_category
 {
 public:
 	virtual const char * name() const noexcept { return "nscript"; }
 	virtual std::string message(int ev) const {
-		switch(static_cast<nscript_error>(ev))	{
-		case nscript_error::runtime_error:		return "runtime error";
-		case nscript_error::unexpected_eof:		return "unexpected end";
-		case nscript_error::missing_character:	return "missing character";
-		case nscript_error::missing_lval:		return "missing lvalue";
-		case nscript_error::unknown_var:		return "unknown variable";
-		case nscript_error::syntax_error:		return "syntax error";
-		case nscript_error::bad_param_count:	return "bad parameters count";
-		case nscript_error::type_mismatch:		return "type mismatch";
-		default:								return "unknown error";
+		switch(static_cast<errc>(ev))	{
+		case errc::runtime_error:		return "runtime error";
+		case errc::unexpected_eof:		return "unexpected end";
+		case errc::missing_character:	return "missing character";
+		case errc::missing_lval:		return "missing variable";
+		case errc::unknown_var:			return "unknown variable";
+		case errc::syntax_error:		return "syntax error";
+		case errc::bad_param_count:		return "bad parameters count";
+		case errc::type_mismatch:		return "type mismatch";
+		default:						return "unknown error";
 		}
 	};
 };
 
 const std::error_category& nscript_category();
-std::error_code make_error_code(nscript_error e);
-std::error_condition make_error_condition(nscript_error e);
+std::error_code make_error_code(errc e);
+std::error_condition make_error_condition(errc e);
 
 struct i_object;
 class v_array;
@@ -53,7 +58,7 @@ using string_t = std::string;
 using date_t = std::chrono::system_clock::time_point;
 using object_ptr = std::shared_ptr<i_object>;
 using array_ptr = std::shared_ptr<v_array>;
-using value_t = std::variant<std::monostate, int, double, string_t, date_t, object_ptr>;
+using value_t = std::variant<std::monostate, int, double, string_t, date_t, object_ptr, std::exception_ptr>;
 using params_t = std::vector<value_t>;
 
 std::string to_string(value_t v);
@@ -63,7 +68,8 @@ date_t to_date(value_t v);
 params_t* to_array_if(const value_t& v);
 params_t* to_array_if(const object_ptr& o);
 array_ptr to_array(const value_t& v);
-bool is_empty(const value_t& v);
+inline bool is_empty(const value_t& v) { return v.index() == 0; }
+inline const std::exception_ptr failed(const value_t& v) { if(auto pe = std::get_if<std::exception_ptr>(&v); pe) return *pe; return {}; }
 
 // Interface for extension objects
 struct i_object {
@@ -138,12 +144,13 @@ public:
 	NScript(string_view script, const context *pcontext = nullptr) : _context(pcontext)	{_parser.init(script);}
 	NScript() : _context(nullptr)	{}
 	~NScript(void)					{};
-	value_t eval(string_view script) { std::error_code ec; return eval(script, ec); };
-	value_t eval(string_view script, std::error_code& ec);
+	value_t eval(string_view script);
 	void add(string_t name, value_t object)	{ _context.set(name, object); }
 
 protected:
 	enum Precedence	{Script = 0,Statement,Assignment,Conditional,Logical,Binary,Equality,Relation,Addition,Multiplication,Power,Unary,Functional,Primary,Term};
+	friend class user_class;
+	friend class user_function;
 
 	template <Precedence L> void parse(value_t& result, bool skip);
 	template <Precedence L> void parse(parser::state state, value_t& result);
@@ -164,16 +171,16 @@ protected:
 class object : public i_object, public std::enable_shared_from_this<object> {
 public:
 	object()	{};
-	value_t create() const				{ throw std::errc::not_supported; }
+	value_t create() const				{ throw std::system_error(std::make_error_code(std::errc::not_supported), "object"); }
 	value_t get()						{ return shared_from_this(); }
-	void set(value_t value)				{ throw std::errc::not_supported; }
-	value_t call(value_t params)		{ throw std::errc::not_supported; }
-	value_t item(string_t item)			{ throw std::errc::not_supported; }
-	value_t index(value_t index)		{ throw std::errc::not_supported; }
-	string_t print() const				{ throw std::errc::not_supported; }
+	void set(value_t value)				{ throw std::system_error(std::make_error_code(std::errc::not_supported), "object"); }
+	value_t call(value_t params)		{ throw std::system_error(std::make_error_code(std::errc::not_supported), "object"); }
+	value_t item(string_t item)			{ throw std::system_error(std::make_error_code(std::errc::not_supported), "object"); }
+	value_t index(value_t index)		{ throw std::system_error(std::make_error_code(std::errc::not_supported), "object"); }
+	string_t print() const				{ throw std::system_error(std::make_error_code(std::errc::not_supported), "object"); }
 	virtual ~object()					{};
 };
 
 }
 
-namespace std { template<> struct is_error_code_enum<nscript3::nscript_error> : public true_type {}; }
+namespace std { template<> struct is_error_code_enum<nscript3::errc> : public true_type {}; }
