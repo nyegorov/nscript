@@ -6,25 +6,17 @@
 #pragma once
 
 #include <chrono>
+#include <memory>
 #include <optional>
-#include <variant>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <memory>
 #include <unordered_map>
 #include <unordered_set>
-
+#include <variant>
 #include <vector>
-#include <map>
-#include <set>
 
 namespace nscript3	{
-
-class nscript_error : public std::system_error
-{
-	using system_error::system_error;
-};
 
 enum class errc {runtime_error = 1001, unexpected_eof, missing_character, unknown_var, missing_lval, syntax_error, bad_param_count, type_mismatch };
 
@@ -90,7 +82,7 @@ class context
 public:
 	typedef std::unordered_set<string_t>			var_names;
 	context(const context *base, const var_names *vars = nullptr);
-	void push()		{_locals.push_back(vars_t());}
+	void push()		{_locals.emplace_back();}
 	void pop()		{_locals.pop_back();}
 	value_t& get(string_t name, bool local = false);
 	std::optional<value_t> get(string_t name) const;
@@ -138,12 +130,12 @@ private:
 };
 
 // Main class for executing scripts
-class NScript
+class nscript
 {
 public:
-	NScript(string_view script, const context *pcontext = nullptr) : _context(pcontext)	{_parser.init(script);}
-	NScript() : _context(nullptr)	{}
-	~NScript(void)					{};
+	nscript(string_view script, const context *pcontext = nullptr) : _context(pcontext)	{_parser.init(script);}
+	nscript() : _context(nullptr)	{}
+	~nscript(void)					{};
 	value_t eval(string_view script);
 	void add(string_t name, value_t object)	{ _context.set(name, object); }
 

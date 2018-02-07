@@ -15,7 +15,7 @@ namespace UnitTest
 TEST_CLASS(NScript3Test)
 {
 	std::error_code eval_hr(const char *expr) {
-		nscript3::NScript ns;
+		nscript3::nscript ns;
 		auto v = ns.eval(expr);
 		try {
 			if(auto pe = failed(v); pe)	std::rethrow_exception(pe);
@@ -26,7 +26,7 @@ TEST_CLASS(NScript3Test)
 	}
 
 	string eval(const char *expr) {
-		nscript3::NScript ns;
+		nscript3::nscript ns;
 		return to_string(ns.eval(expr));
 	}
 

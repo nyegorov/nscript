@@ -97,7 +97,7 @@ protected:
 template<class FN> object_ptr make_fn(int count, FN fn) { return std::make_shared<builtin_function<FN>>(count, fn); }
 
 // User-defined functions
-void process_args(const args_list& args, const value_t& params, NScript& script) {
+void process_args(const args_list& args, const value_t& params, nscript& script) {
 	if(args.size() == 0) {
 		script.add("@", params);
 	} else if(args.size() == 1 && is_empty(params))	{
@@ -117,7 +117,7 @@ public:
 	user_function(const args_list& args, string_view body, const context *pcontext = nullptr, const context::var_names* pcaptures = nullptr) 
 		: _args(args), _body(body), _context(pcontext, pcaptures)	{}
 	value_t call(value_t params) {
-		NScript script(_body, &_context);
+		nscript script(_body, &_context);
 		process_args(_args, params, script);
 		auto res = script.eval({});
 		if(auto pe = failed(res); pe)	std::rethrow_exception(pe);
@@ -138,12 +138,12 @@ public:
 	value_t call(value_t params)	{ _params = params; return shared_from_this(); }
 
 	class instance : public object {
-		NScript				_script;
+		nscript				_script;
 	public:
 		instance(string_view body, const context *pcontext, const args_list& args, value_t params) : _script(body, pcontext) {
 			process_args(args, params, _script);
 			//auto res = _script.eval({});
-			_script.parse<NScript::Script>(value_t{}, false);
+			_script.parse<nscript::Script>(value_t{}, false);
 		}
 		value_t item(string_t item)	{ return _script.eval(item); }
 	};

@@ -156,6 +156,8 @@ std::optional<value_t> context::get(string_t name) const
 }
 #pragma endregion
 
+#pragma region Nscript
+
 static auto s_operators = std::make_tuple(
 	std::tuple<op_statmt>(),
 	std::tuple<>(),
@@ -173,7 +175,7 @@ static auto s_operators = std::make_tuple(
 	std::tuple<op_xpp, op_xmm, op_call, op_index, op_item, op_tail>()
 );
 
-value_t NScript::eval(std::string_view script)
+value_t nscript::eval(std::string_view script)
 {
 	value_t result;
 	_context.push();
@@ -189,7 +191,7 @@ value_t NScript::eval(std::string_view script)
 }
 
 // Parse comma-separated arguments list
-void NScript::parse_args(args_list& args, bool force_args) {
+void nscript::parse_args(args_list& args, bool force_args) {
 	auto token = _parser.next();
 	if(token != parser::lpar && !force_args) return;		// function without parameters
 	if(token == parser::lpar)	_parser.next();
@@ -205,7 +207,7 @@ void NScript::parse_args(args_list& args, bool force_args) {
 }
 
 // Jump to position <state>, parse expression and return back
-template <NScript::Precedence P> void NScript::parse(parser::state state, value_t& result)
+template <nscript::Precedence P> void nscript::parse(parser::state state, value_t& result)
 {
 	auto current = _parser.get_state();
 	_parser.set_state(state);
@@ -213,7 +215,7 @@ template <NScript::Precedence P> void NScript::parse(parser::state state, value_
 	_parser.set_state(current);
 }
 
-template <NScript::Precedence P, class OP> bool NScript::apply_op(OP op, value_t& result, bool skip)
+template <nscript::Precedence P, class OP> bool nscript::apply_op(OP op, value_t& result, bool skip)
 {
 	if(op.token == _parser.get_token()) {
 		if(op.token != parser::lpar && op.token != parser::lsquare && op.token != parser::dot)	_parser.next();
@@ -239,7 +241,7 @@ template <NScript::Precedence P, class OP> bool NScript::apply_op(OP op, value_t
 }
 
 
-template <NScript::Precedence P> void NScript::parse(value_t& result, bool skip)
+template <nscript::Precedence P> void nscript::parse(value_t& result, bool skip)
 {
 	// main parse loop
 	parser::token token = _parser.get_token();
@@ -250,15 +252,15 @@ template <NScript::Precedence P> void NScript::parse(value_t& result, bool skip)
 	while(std::apply([&](auto ...op) { return (apply_op<P, decltype(op)>(op, result, skip) || ...); }, std::get<P>(s_operators)));
 }
 
-template<> void NScript::parse<NScript::Unary>(value_t& result, bool skip)
+template<> void nscript::parse<nscript::Unary>(value_t& result, bool skip)
 {
 	parser::token token = _parser.get_token();
 	if(_parser.get_token() == parser::end)	return;
-	if(!std::apply([&](auto ...op) { return (apply_op<NScript::Unary, decltype(op)>(op, result, skip) || ...); }, std::get<NScript::Unary>(s_operators)))
-		parse<NScript::Functional>(result, skip);
+	if(!std::apply([&](auto ...op) { return (apply_op<nscript::Unary, decltype(op)>(op, result, skip) || ...); }, std::get<nscript::Unary>(s_operators)))
+		parse<nscript::Functional>(result, skip);
 }
 
-template<> void NScript::parse<NScript::Statement>(value_t& result, bool skip)
+template<> void nscript::parse<nscript::Statement>(value_t& result, bool skip)
 {
 	parser::token token = _parser.get_token();
 	parse<Assignment>(result, skip);
@@ -274,7 +276,7 @@ template<> void NScript::parse<NScript::Statement>(value_t& result, bool skip)
 	}
 }
 
-template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
+template<> void nscript::parse<nscript::Primary>(value_t& result, bool skip)
 {
 	parser::token token = _parser.get_token();
 	bool local = false;
@@ -313,7 +315,7 @@ template<> void NScript::parse<NScript::Primary>(value_t& result, bool skip)
 }
 
 // Parse "if <cond> <true-part> [else <part>]" statement
-template<NScript::Precedence P> void NScript::parse_if(value_t& result, bool skip) {
+template<nscript::Precedence P> void nscript::parse_if(value_t& result, bool skip) {
 	bool cond = skip || to_int(*result);
 	parse<P>(result, !cond || skip);
 	if(_parser.get_token() == parser::ifelse || _parser.get_token() == parser::colon) {
@@ -323,7 +325,7 @@ template<NScript::Precedence P> void NScript::parse_if(value_t& result, bool ski
 }
 
 // Parse "for([<start>];<cond>;[<inc>])	<body>" statement
-void NScript::parse_for(value_t& result, bool skip) {
+void nscript::parse_for(value_t& result, bool skip) {
 	parser::state condition, increment, body;
 	_parser.next();
 	if(_parser.get_token() != parser::lpar)		throw std::system_error(errc::syntax_error, "'for'");
@@ -357,7 +359,7 @@ void NScript::parse_for(value_t& result, bool skip) {
 	}
 }
 
-void NScript::parse_func(value_t& result, bool skip)
+void nscript::parse_func(value_t& result, bool skip)
 {
 	args_list args;
 	parse_args(args, _parser.get_token() == parser::lambda);
@@ -370,7 +372,7 @@ void NScript::parse_func(value_t& result, bool skip)
 }
 
 // Parse "object [(<arguments>)] {<body>}" statement
-void NScript::parse_obj(value_t& result, bool skip)
+void nscript::parse_obj(value_t& result, bool skip)
 {
 	args_list args;
 	parse_args(args, false);
@@ -383,6 +385,8 @@ void NScript::parse_obj(value_t& result, bool skip)
 	if(!skip)	result = std::make_shared<user_class>(args, _parser.get_content(state, _parser.get_state()), &_context, &_varnames);
 	if(_parser.get_token() == parser::rcurly)	_parser.next();
 }
+
+#pragma endregion
 
 #pragma region Parser
 
