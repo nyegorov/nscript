@@ -96,7 +96,6 @@ private:
 // Parser of input stream to a list of tokens
 class parser	{
 public:
-	using char_t = string_t::value_type;
 	using state = size_t;
 	enum token	{end,mod,assign,ge,gt,le,lt,nequ,name,value,land,lor,lnot,stmt,err,dot,newobj,minus,lpar,rpar,lcurly,rcurly,equ,plus,lsquare,rsquare,multiply,divide,lambda,and,or,not,pwr,comma,unaryplus,unaryminus,forloop,ifop,iffunc,ifelse,func,object,plusset, minusset, mulset, divset, idivset, setvar,my,colon,apo,mdot};
 
@@ -113,7 +112,7 @@ public:
 private:
 	typedef std::unordered_map<string_t, token> Keywords;
 	static Keywords	_keywords;
-	char_t			_decpt = std::use_facet<std::numpunct<char_t>>(std::locale()).decimal_point();
+	int			_decpt = std::use_facet<std::numpunct<char>>(std::locale()).decimal_point();
 	token			_token;
 	string_t		_content;
 	state			_pos = 0;
@@ -121,12 +120,12 @@ private:
 	value_t			_value;
 	string_t		_name;
 
-	char_t peek()			{return _pos >= _content.length() ? 0 : _content[_pos];}
-	char_t read()			{char_t c = peek();_pos++;return c;}
+	int peek()			{ if(_pos >= _content.length())	return 0; int c = _content[_pos]; return c < 0 ? c + 256 : c; }
+	int read()			{auto c = peek(); _pos++; return c;}
 	void back()				{_pos--;}
-	void read_string(char_t quote);
-	void read_number(char_t c);
-	void read_name(char_t c);
+	void read_string(int quote);
+	void read_number(int c);
+	void read_name(int c);
 };
 
 // Main class for executing scripts
@@ -169,7 +168,7 @@ public:
 	value_t call(value_t params)		{ throw std::system_error(std::make_error_code(std::errc::not_supported), "object"); }
 	value_t item(string_t item)			{ throw std::system_error(std::make_error_code(std::errc::not_supported), "object"); }
 	value_t index(value_t index)		{ throw std::system_error(std::make_error_code(std::errc::not_supported), "object"); }
-	string_t print() const				{ throw std::system_error(std::make_error_code(std::errc::not_supported), "object"); }
+	string_t print() const				{ return "[object]"; }
 	virtual ~object()					{};
 };
 

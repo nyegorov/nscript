@@ -23,6 +23,8 @@ template<> struct std::less<nscript3::value_t> {
 
 namespace nscript3	{
 
+// Helper functions
+
 const std::error_category& nscript_category()
 {
 	static nscript_category_impl instance;
@@ -52,7 +54,6 @@ array_ptr to_array(const value_t& v)
 					   : std::make_shared<v_array>(std::initializer_list<value_t>{ v });
 }
 
-// Globals
 // 'dereference' object. If v holds an ext. object, replace it with the value of object
 value_t& operator *(value_t& v)	{
 	if(auto pobj = std::get_if<object_ptr>(&v)) {
@@ -406,9 +407,9 @@ parser::parser() {}
 parser::token parser::next()
 {
 	_lastpos = _pos;
-	char_t c, cc;
-	while(iswspace(c = read()));
-	switch(unsigned char(c))	{
+	int c, cc;
+	while(isspace(c = read()));
+	switch(c)	{
 		case '\0':	_token = end;break;
 		case '+':	cc = peek(); _token = (cc == '+' ? read(), unaryplus  : cc == '=' ? read(), plusset  : plus); break;
 		case '-':	cc = peek(); _token = (cc == '-' ? read(), unaryminus : cc == '=' ? read(), minusset : minus); break;
@@ -441,7 +442,7 @@ parser::token parser::next()
 		case '?':	_token = ifop;break;
 		case ':':	_token = peek() == '=' ? read(), setvar : colon;break;
 		default:
-			if(isdigit(unsigned char(c)))	{
+			if(isdigit(c))	{
 				read_number(c);
 			}	else	{
 				read_name(c);
@@ -454,7 +455,7 @@ parser::token parser::next()
 }
 
 // Parse integer/double/hexadecimal value from input stream
-void parser::read_number(char_t c)
+void parser::read_number(int c)
 {
 	enum number_stage {nsint, nsdot, nsexp, nspwr, nshex} stage = nsint;
 	int base = 10, m = c - '0';
@@ -465,7 +466,7 @@ void parser::read_number(char_t c)
 
 	while(c = read())	{	
 		if(isdigit(c))	{
-			char_t v = c - '0';
+			int v = c - '0';
 			if(stage == nsint || stage == nshex) {
 				if(m > (INT_MAX - v) / base)	throw std::system_error(std::make_error_code(std::errc::value_too_large), "number");
 				m = m * base + v;
@@ -477,7 +478,7 @@ void parser::read_number(char_t c)
 			}
 			if(stage == nspwr)		e2 = e2 * 10  + v;
 		}	else if(isxdigit(c) && stage == nshex)		{
-			char_t v = 10 + (toupper(c) - 'A');
+			int v = 10 + (toupper(c) - 'A');
 			if(m > (INT_MAX - v) / base)	throw std::system_error(std::make_error_code(std::errc::value_too_large), "number");
 			m = m * base + v;
 		}	else if(c == '.')		{
@@ -499,11 +500,11 @@ void parser::read_number(char_t c)
 }
 
 // Parse quoted string from input stream
-void parser::read_string(char_t quote)	{
+void parser::read_string(int quote)	{
 	string_t temp;
 	for(;;temp += read())	{
 		state endpos = _content.find(quote, _pos);
-		if(endpos == string_t::npos)	throw std::system_error(errc::missing_character, string_t("'") + quote + "'");
+		if(endpos == string_t::npos)	throw std::system_error(errc::missing_character, string_t("'") + (string_t::value_type)quote + "'");
 		temp += _content.substr(_pos, endpos-_pos).c_str();
 		_pos = endpos+1;
 		if(peek() != quote)	break;
@@ -512,7 +513,7 @@ void parser::read_string(char_t quote)	{
 }
 
 // Parse object name from input stream
-void parser::read_name(char_t c)	
+void parser::read_name(int c)	
 {
 	if(!isalpha(unsigned char(c)) && c != '@' && c != '_')		throw std::system_error(errc::syntax_error, "name");
 	_name = c;
