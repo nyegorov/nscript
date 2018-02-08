@@ -128,6 +128,16 @@ private:
 	void read_name(int c);
 };
 
+enum class associativity { left, right, none };
+enum class dereference { none, left, right, both };
+struct op_info
+{
+	parser::token token = parser::token::end;
+	associativity assoc = associativity::left;
+	dereference deref = dereference::both;
+	value_t(*paction) (value_t& x, value_t& y) = nullptr;
+};
+
 // Main class for executing scripts
 class nscript
 {
@@ -143,14 +153,15 @@ protected:
 	friend class user_class;
 	friend class user_function;
 
-	template <Precedence L> void parse(value_t& result, bool skip);
-	template <Precedence L> void parse(parser::state state, value_t& result);
-	template <Precedence L> void parse_if(value_t& result, bool skip);
+	void parse(Precedence level, value_t& result, bool skip);
+	void parse(Precedence level, parser::state state, value_t& result);
+	void parse_if(Precedence level, value_t& result, bool skip);
 	void parse_args(args_list& args, bool force_args);
 	void parse_func(value_t& result, bool skip);
 	void parse_for(value_t& result, bool skip);
 	void parse_obj(value_t& result, bool skip);
-	template <Precedence L, class OP> bool apply_op(OP op, value_t& result, bool skip);
+
+	bool apply_op(Precedence level, const op_info& op, value_t& result, bool skip);
 
 	parser				_parser;
 	context				_context;

@@ -143,7 +143,7 @@ public:
 		instance(string_view body, const context *pcontext, const args_list& args, value_t params) : _script(body, pcontext) {
 			process_args(args, params, _script);
 			//auto res = _script.eval({});
-			_script.parse<nscript::Script>(value_t{}, false);
+			_script.parse(nscript::Script, value_t{}, false);
 		}
 		value_t item(string_t item)	{ return _script.eval(item); }
 	};

@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <array>
 #include <ctime>
 #include <iomanip>
 #include <locale>
@@ -159,22 +160,21 @@ std::optional<value_t> context::get(string_t name) const
 
 #pragma region Nscript
 
-static auto s_operators = std::make_tuple(
-	std::tuple<op_statmt>(),
-	std::tuple<>(),
-	std::tuple<op_assign, op_addset, op_subset, op_mulset, op_divset, op_join>(),
-	std::tuple<op_if>(),
-	std::tuple<op_land, op_lor>(),
-	std::tuple<op_and, op_or>(),
-	std::tuple<op_eq, op_ne>(),
-	std::tuple<op_gt, op_ge, op_lt, op_le>(),
-
-	std::tuple<op_add, op_sub>(),
-	std::tuple<op_mul, op_div, op_mod>(),
-	std::tuple<op_pow, op_dot>(),
-	std::tuple<op_ppx, op_mmx, op_new, op_neg, op_not, op_lnot, op_head>(),
-	std::tuple<op_xpp, op_xmm, op_call, op_index, op_item, op_tail>()
-);
+static std::vector<op_info> s_operators[] = {
+	{ op_stmt },
+	{ },
+	{ op_assign, op_addset, op_subset, op_mulset, op_divset, op_join },
+	{ op_if },
+	{ op_land, op_lor },
+	{ op_and, op_or },
+	{ op_eq, op_ne },
+	{ op_gt, op_ge, op_lt, op_le },
+	{ op_add, op_sub },
+	{ op_mul, op_div, op_mod },
+	{ op_pow, op_dot },
+	{ op_ppx, op_mmx, op_new, op_neg, op_not, op_lnot , op_head },
+	{ op_xpp, op_xmm, op_call, op_index, op_item, op_tail },
+};
 
 value_t nscript::eval(std::string_view script)
 {
@@ -182,7 +182,7 @@ value_t nscript::eval(std::string_view script)
 	_context.push();
 	try	{
 		_parser.init(script);
-		parse<Script>(result, false);
+		parse(Script, result, false);
 		if(_parser.get_token() != parser::end)	throw std::system_error(errc::syntax_error, "eval");
 		*result;
 	}
@@ -208,120 +208,113 @@ void nscript::parse_args(args_list& args, bool force_args) {
 }
 
 // Jump to position <state>, parse expression and return back
-template <nscript::Precedence P> void nscript::parse(parser::state state, value_t& result)
+void nscript::parse(nscript::Precedence level, parser::state state, value_t& result)
 {
 	auto current = _parser.get_state();
 	_parser.set_state(state);
-	parse<P>(result, false);
+	parse(level, result, false);
 	_parser.set_state(current);
 }
 
-template <nscript::Precedence P, class OP> bool nscript::apply_op(OP op, value_t& result, bool skip)
+bool nscript::apply_op(Precedence level, const op_info& op, value_t& result, bool skip)
 {
 	if(op.token == _parser.get_token()) {
 		if(op.token != parser::lpar && op.token != parser::lsquare && op.token != parser::dot)	_parser.next();
 		if(op.token == parser::ifop) {		// ternary "a?b:c" operator
-			parse_if<Logical>(result, skip);
+			parse_if(Logical, result, skip);
 			return true;
 		}
 
 		value_t right = result;
 
 		// parse right-hand operand
-		if(op.token == parser::dot) { right = _parser.get_value(); _parser.next(); }	// special case for '.' operator
-		else if(op.assoc == associativity::right)	parse<P>(right, skip);				// right-associative operators
-		else if(op.assoc == associativity::left)	parse<P+1>(right, skip);			// left-associative operators
+		if(op.token == parser::dot) { right = _parser.get_value(); _parser.next(); }		// special case for '.' operator
+		else if(op.assoc == associativity::right)	parse(level, right, skip);				// right-associative operators
+		else if(op.assoc == associativity::left)	parse(Precedence(level+1), right, skip);// left-associative operators
 
-		if(op.deref == dereference::left  || op.deref == dereference::both)	*result;
+		if(op.deref == dereference::left || op.deref == dereference::both)	*result;
 		if(op.deref == dereference::right || op.deref == dereference::both)	*right;
 
-		if(!skip)	result = std::visit(op, result, right);								// perform operator's action
+		if(!skip)	result = op.paction(result, right);								// perform operator's action
 		return true;
 	}
 	return false;
 }
 
-
-template <nscript::Precedence P> void nscript::parse(value_t& result, bool skip)
+void nscript::parse(Precedence level, value_t& result, bool skip)
 {
 	// main parse loop
 	parser::token token = _parser.get_token();
-
-	// parse left-hand operand (for binary operators)
-	parse<Precedence(P + 1)>(result, skip);
-	if(_parser.get_token() == parser::end)	return;
-	while(std::apply([&](auto ...op) { return (apply_op<P, decltype(op)>(op, result, skip) || ...); }, std::get<P>(s_operators)));
-}
-
-template<> void nscript::parse<nscript::Unary>(value_t& result, bool skip)
-{
-	parser::token token = _parser.get_token();
-	if(_parser.get_token() == parser::end)	return;
-	if(!std::apply([&](auto ...op) { return (apply_op<nscript::Unary, decltype(op)>(op, result, skip) || ...); }, std::get<nscript::Unary>(s_operators)))
-		parse<nscript::Functional>(result, skip);
-}
-
-template<> void nscript::parse<nscript::Statement>(value_t& result, bool skip)
-{
-	parser::token token = _parser.get_token();
-	parse<Assignment>(result, skip);
-	if(_parser.get_token() == parser::comma) {
-		auto a = std::make_shared<v_array>(std::initializer_list<value_t>{*result});
-		do {
-			value_t v;
+	if(level == Primary) {
+		bool local = false;
+		switch(token) {
+		case parser::value:		if(!skip)	result = _parser.get_value(); _parser.next(); break;
+		case parser::my:
+			if(_parser.next() != parser::name)	throw std::system_error(errc::syntax_error, "'my'");
+			local = true;
+			[[fallthrough]];
+		case parser::name:
+			if(skip)	_varnames.insert(_parser.get_name());
+			else		result = _context.get(_parser.get_name(), local);
 			_parser.next();
-			parse<Assignment>(v, skip);
-			a->items().push_back(*v);
-		} while(_parser.get_token() == parser::comma);
-		result = a;
-	}
-}
+			break;
+		case parser::iffunc:	_parser.next(); parse(Assignment, result, skip); parse_if(Assignment, result, skip); break;
+		case parser::lambda:
+		case parser::func:		parse_func(result, skip); break;
+		case parser::forloop:	parse_for(result, skip); break;
+		case parser::object:	parse_obj(result, skip); break;
+		case parser::lpar:
+		case parser::lsquare:
+			_parser.next();
+			if(!skip)	result = value_t{};
+			parse(Statement, result, skip);
+			_parser.check_pair(token);
+			break;
+		case parser::lcurly:
+			_parser.next();
+			_context.push();
+			parse(Script, result, skip);
+			_context.pop();
+			_parser.check_pair(token);
+			break;
+		case parser::end:		throw std::system_error(errc::unexpected_eof);
+		}
+	} else if(level == Statement) {
+		parse(Assignment, result, skip);
+		if(_parser.get_token() == parser::comma) {
+			auto a = std::make_shared<v_array>(std::initializer_list<value_t>{*result});
+			do {
+				value_t v;
+				_parser.next();
+				parse(Assignment, v, skip);
+				a->items().push_back(*v);
+			} while(_parser.get_token() == parser::comma);
+			result = a;
+		}
+	} else {
+		// parse left-hand operand (for binary operators)
+		if(level != Unary)	parse(Precedence(level + 1), result, skip);
+		if(_parser.get_token() == parser::end)	return;
 
-template<> void nscript::parse<nscript::Primary>(value_t& result, bool skip)
-{
-	parser::token token = _parser.get_token();
-	bool local = false;
-	switch(token) {
-	case parser::value:		if(!skip)	result = _parser.get_value(); _parser.next(); break;
-	case parser::my:
-		if(_parser.next() != parser::name)	throw std::system_error(errc::syntax_error, "'my'");
-		local = true;
-		[[fallthrough]];
-	case parser::name:
-		if(skip)	_varnames.insert(_parser.get_name());
-		else		result = _context.get(_parser.get_name(), local);
-		_parser.next();
-		break;
-	case parser::iffunc:	_parser.next(); parse<Assignment>(result, skip); parse_if<Assignment>(result, skip); break;
-	case parser::lambda:
-	case parser::func:		parse_func(result, skip); break;
-	case parser::forloop:	parse_for(result, skip); break;
-	case parser::object:	parse_obj(result, skip);break;
-	case parser::lpar:
-	case parser::lsquare:
-		_parser.next();
-		if(!skip)	result = value_t{};
-		parse<Statement>(result, skip);
-		_parser.check_pair(token);
-		break;
-	case parser::lcurly:
-		_parser.next();
-		_context.push();
-		parse<Script>(result, skip);
-		_context.pop();
-		_parser.check_pair(token);
-		break;
-	case parser::end:		throw std::system_error(errc::unexpected_eof);
+		bool found;
+		do {
+			found = false;
+			for(auto& op : s_operators[level]) found |= apply_op(level, op, result, skip);
+		} while(found && level != Unary);
+
+		if(!found && level == Unary) {
+			parse(Functional, result, skip);
+		}
 	}
 }
 
 // Parse "if <cond> <true-part> [else <part>]" statement
-template<nscript::Precedence P> void nscript::parse_if(value_t& result, bool skip) {
+void nscript::parse_if(Precedence level, value_t& result, bool skip) {
 	bool cond = skip || to_int(*result);
-	parse<P>(result, !cond || skip);
+	parse(level, result, !cond || skip);
 	if(_parser.get_token() == parser::ifelse || _parser.get_token() == parser::colon) {
 		_parser.next();
-		parse<P>(result, cond || skip);
+		parse(level, result, cond || skip);
 	}
 }
 
@@ -332,30 +325,30 @@ void nscript::parse_for(value_t& result, bool skip) {
 	if(_parser.get_token() != parser::lpar)		throw std::system_error(errc::syntax_error, "'for'");
 	_parser.next();
 	if(_parser.get_token() != parser::stmt) {	// start expression
-		parse<Statement>(result, skip);
+		parse(Statement, result, skip);
 		if(_parser.get_token() != parser::stmt)	throw std::system_error(errc::syntax_error, "'for'");
 	}
 	_parser.next();
 	condition = _parser.get_state();
 	if(_parser.get_token() != parser::stmt)	{	// exit condition
-		parse<Statement>(result, true);
+		parse(Statement, result, true);
 		if(_parser.get_token() != parser::stmt)	throw std::system_error(errc::syntax_error, "'for'");
 	}
 	_parser.next();
 	increment = _parser.get_state();
 	if(_parser.get_token() != parser::rpar)	{	// increment
-		parse<Statement>(result, true);
+		parse(Statement, result, true);
 		if(_parser.get_token() != parser::rpar)	throw std::system_error(errc::syntax_error, "'for'");
 	}
 	_parser.next();
 	body = _parser.get_state();
-	parse<Statement>(result, true);				// body
+	parse(Statement, result, true);				// body
 	if(!skip)	{
 		while(true)	{
-			parse<Statement>(condition, result);
+			parse(Statement, condition, result);
 			if(!to_int(*result))	break;
-			parse<Statement>(body, result);
-			parse<Statement>(increment, result);
+			parse(Statement, body, result);
+			parse(Statement, increment, result);
 		}
 	}
 }
@@ -368,7 +361,7 @@ void nscript::parse_func(value_t& result, bool skip)
 	if(_parser.get_token() == parser::end)	throw std::system_error(errc::syntax_error, "'fn'");
 	// _varnames contains list of variables to be captured by function
 	if(!skip)	_varnames.clear();
-	parse<Assignment>(result, true);
+	parse(Assignment, result, true);
 	if(!skip)	result = std::make_shared<user_function>(args, _parser.get_content(state, _parser.get_state()), &_context, &_varnames);
 }
 
@@ -382,7 +375,7 @@ void nscript::parse_obj(value_t& result, bool skip)
 	if(_parser.get_token() == parser::end)	throw std::system_error(errc::syntax_error, "'object'");
 	// _varnames contains list of variables to be captured by object
 	if(!skip)	_varnames.clear();
-	parse<Script>(result, true);
+	parse(Script, result, true);
 	if(!skip)	result = std::make_shared<user_class>(args, _parser.get_content(state, _parser.get_state()), &_context, &_varnames);
 	if(_parser.get_token() == parser::rcurly)	_parser.next();
 }

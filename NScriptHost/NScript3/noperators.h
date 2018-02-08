@@ -5,8 +5,8 @@
 namespace nscript3 {
 
 using std::string;
-enum class associativity { left, right, none };
-enum class dereference { none, left, right, both };
+//enum class associativity { left, right, none };
+//enum class dereference { none, left, right, both };
 
 struct op_base {
 	const parser::token token = parser::token::end;
@@ -145,7 +145,7 @@ date_t to_date(value_t v)
 
 #pragma region Mathematical
 
-struct op_add : op_base {
+struct v_add : op_base {
 	const parser::token token = parser::token::plus;
 	using op_base::operator();
 	template<class Y> value_t operator()(object_ptr x, Y y)	{ return std::visit([this, y](auto x) { return operator()(x, y); }, x->get()); }
@@ -163,7 +163,7 @@ struct op_add : op_base {
 	value_t operator()(double x, string y)	{ return std::to_string(x) + y; }
 };
 
-struct op_sub : op_base {
+struct v_sub : op_base {
 	const parser::token token = parser::token::minus;
 	using op_base::operator();
 	template<class Y> value_t operator()(object_ptr x, Y y) { return std::visit([this, y](auto x) { return operator()(x, y); }, x->get()); }
@@ -176,7 +176,7 @@ struct op_sub : op_base {
 	value_t operator()(double x, double y)	{ return { x - y }; }
 };
 
-struct op_neg : op_base {
+struct v_neg : op_base {
 	const parser::token token = parser::token::minus;
 	const associativity assoc = associativity::right;
 	using op_base::operator();
@@ -185,7 +185,7 @@ struct op_neg : op_base {
 	template<class X> value_t operator()(X x, object_ptr y) { return std::visit([this, x](auto y) { return operator()(x, y); }, y->get()); }
 };
 
-struct op_mul : op_base {
+struct v_mul : op_base {
 	const parser::token token = parser::token::multiply;
 	using op_base::operator();
 	value_t operator()(int x, int y) { return { x * y }; }
@@ -194,7 +194,7 @@ struct op_mul : op_base {
 	value_t operator()(double x, double y) { return { x * y }; }
 };
 
-struct op_div : op_base {
+struct v_div : op_base {
 	const parser::token token = parser::token::divide;
 	using op_base::operator();
 	value_t operator()(int x, int y) { return { x / y }; }
@@ -203,7 +203,7 @@ struct op_div : op_base {
 	value_t operator()(double x, double y) { return { x / y }; }
 };
 
-struct op_mod : op_base	{
+struct v_mod : op_base	{
 	const parser::token token = parser::token::mod;
 	using op_base::operator();
 	value_t operator()(int x, int y) { return { x % y }; }
@@ -212,7 +212,7 @@ struct op_mod : op_base	{
 	value_t operator()(double x, double y) { return fmod( x, y); }
 };
 
-struct op_pow : op_base {
+struct v_pow : op_base {
 	const parser::token token = parser::token::pwr;
 	using op_base::operator();
 	value_t operator()(int x, int y) { return { pow(x, y) }; }
@@ -221,17 +221,25 @@ struct op_pow : op_base {
 	value_t operator()(double x, double y) { return { pow(x, y) }; }
 };
 
+op_info op_add{ parser::token::plus,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_add(), x, y); } };
+op_info op_sub{ parser::token::minus,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_sub(), x, y); } };
+op_info op_mul{ parser::token::multiply,associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_mul(), x, y); } };
+op_info op_div{ parser::token::divide,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_div(), x, y); } };
+op_info op_mod{ parser::token::mod,		associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_mod(), x, y); } };
+op_info op_pow{ parser::token::pwr,		associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_pow(), x, y); } };
+op_info op_neg{ parser::token::minus,	associativity::right,dereference::both, [](value_t& x, value_t& y) { return std::visit(v_neg(), x, y); } };
+
 #pragma endregion // +, -, *, /
 
 #pragma region Bitwise
 
-struct op_and : op_base {
+struct v_and : op_base {
 	const parser::token token = parser::token::and;
 	using op_base::operator();
 	value_t operator()(int x, int y) { return { x & y }; }
 };
 
-struct op_or : op_base {
+struct v_or : op_base {
 	const parser::token token = parser::token::or;
 	using op_base::operator();
 	value_t operator()(int x, int y) { return { x | y }; }
@@ -240,12 +248,16 @@ struct op_or : op_base {
 	}
 };
 
-struct op_not : op_base {
+struct v_not : op_base {
 	const parser::token token = parser::token::not;
 	const associativity assoc = associativity::right;
 	using op_base::operator();
 	template<class X> value_t operator()(X, int y) { return ~y; }
 };
+
+op_info op_and{ parser::token::and,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_and(), x, y); } };
+op_info op_or { parser::token::or,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_or(), x, y); } };
+op_info op_not{ parser::token::not,	associativity::right,dereference::both, [](value_t& x, value_t& y) { return std::visit(v_not(), x, y); } };
 
 #pragma endregion      // &, |, ~
 
@@ -272,63 +284,74 @@ struct comparator {
 	template<class X, class Y> int operator()(X x, Y y) { throw std::system_error(errc::type_mismatch, "compare"); }
 };
 
-struct op_gt : op_base {
+struct v_gt : op_base {
 	const parser::token token = parser::token::gt;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x,y) > 0; }
+	template<class X, class Y> value_t operator()(X x, Y y) { return comparator()(x,y) > 0; }
 };
 
-struct op_lt : op_base {
+struct v_lt : op_base {
 	const parser::token token = parser::token::lt;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x, y) < 0; }
+	template<class X, class Y> value_t operator()(X x, Y y) { return comparator()(x, y) < 0; }
 };
 
-struct op_ge : op_base {
+struct v_ge : op_base {
 	const parser::token token = parser::token::ge;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x, y) >= 0; }
+	template<class X, class Y> value_t operator()(X x, Y y) { return comparator()(x, y) >= 0; }
 };
 
-struct op_le : op_base {
+struct v_le : op_base {
 	const parser::token token = parser::token::le;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x, y) <= 0; }
+	template<class X, class Y> value_t operator()(X x, Y y) { return comparator()(x, y) <= 0; }
 };
 
-struct op_eq : op_base {
+struct v_eq : op_base {
 	const parser::token token = parser::token::equ;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x, y) == 0; }
+	template<class X, class Y> value_t operator()(X x, Y y) { return comparator()(x, y) == 0; }
 };
 
-struct op_ne : op_base {
+struct v_ne : op_base {
 	const parser::token token = parser::token::nequ;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x, y) != 0; }
+	template<class X, class Y> value_t operator()(X x, Y y) { return comparator()(x, y) != 0; }
 };
 
-struct op_land : op_base {
+struct v_land : op_base {
 	const parser::token token = parser::token::land;
 	using op_base::operator();
 	value_t operator()(int x, int y) { return { x && y }; }
 };
 
-struct op_lor : op_base {
+struct v_lor : op_base {
 	const parser::token token = parser::token:: lor ;
 	using op_base::operator();
 	value_t operator()(int x, int y) { return { x || y }; }
 };
 
-struct op_lnot : op_base {
+struct v_lnot : op_base {
 	const parser::token token = parser::token::lnot;
 	const associativity assoc = associativity::right;
 	using op_base::operator();
 	template<class X> value_t operator()(X, int y) { return !y; }
 };
 
-struct op_if : op_base { const parser::token token = parser::token::ifop; };
+struct v_if : op_base { const parser::token token = parser::token::ifop; };
+
+op_info op_gt{ parser::token::gt,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_gt(), x, y); } };
+op_info op_ge{ parser::token::ge,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_ge(), x, y); } };
+op_info op_lt{ parser::token::lt,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_lt(), x, y); } };
+op_info op_le{ parser::token::le,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_le(), x, y); } };
+op_info op_eq{ parser::token::equ,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_eq(), x, y); } };
+op_info op_ne{ parser::token::nequ,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_ne(), x, y); } };
+op_info op_land{parser::token::land,associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_land(), x, y); } };
+op_info op_lor{ parser::token::lor,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_lor(), x, y); } };
+op_info op_lnot{parser::token::lnot,associativity::right,dereference::both, [](value_t& x, value_t& y) { return std::visit(v_lnot(), x, y); } };
+op_info op_if{ parser::token::ifop,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_if(), x, y); } };
 
 #pragma endregion		 // >, <, >=, <=, ==, !=, &&, ||, !
 
 #pragma region Assignments
 
 template <class OP, parser::token TOK>
-struct op_xset : op_base {
+struct v_xset : op_base {
 	const parser::token token = TOK;
 	const associativity assoc = associativity::right;
 	const dereference deref = dereference::right;
@@ -339,32 +362,41 @@ struct op_xset : op_base {
 	}
 };
 
-struct op_ppx : op_xset<op_add, parser::unaryplus>  { 
+struct v_ppx : v_xset<v_add, parser::unaryplus>  { 
 	const dereference deref = dereference::none;
-	template<class X, class Y> value_t operator()(X x, Y y) { return op_xset::operator()(y, 1); }
+	template<class X, class Y> value_t operator()(X x, Y y) { return v_xset::operator()(y, 1); }
 };
-struct op_mmx : op_xset<op_sub, parser::unaryminus> { 
+struct v_mmx : v_xset<v_sub, parser::unaryminus> { 
 	const dereference deref = dereference::none;
-	template<class X, class Y> value_t operator()(X x, Y y) { return op_xset::operator()(y, 1); }
+	template<class X, class Y> value_t operator()(X x, Y y) { return v_xset::operator()(y, 1); }
 };
-struct op_xpp : op_xset<op_add, parser::unaryplus>  { 
+struct v_xpp : v_xset<v_add, parser::unaryplus>  { 
 	const associativity assoc = associativity::none;
-	template<class X, class Y> value_t operator()(X x, Y y) { auto v = *value_t{ x }; op_xset::operator()(x, 1); return v; }
+	template<class X, class Y> value_t operator()(X x, Y y) { auto v = *value_t{ x }; v_xset::operator()(x, 1); return v; }
 };
-struct op_xmm : op_xset<op_sub, parser::unaryminus> { 
+struct v_xmm : v_xset<v_sub, parser::unaryminus> { 
 	const associativity assoc = associativity::none;
-	template<class X, class Y> value_t operator()(X x, Y y) { auto v = *value_t{ x }; op_xset::operator()(x, 1); return v; }
+	template<class X, class Y> value_t operator()(X x, Y y) { auto v = *value_t{ x }; v_xset::operator()(x, 1); return v; }
 };
-struct op_addset : op_xset<op_add, parser::plusset>	{ using op_xset::operator(); };
-struct op_subset : op_xset<op_sub, parser::minusset>{ using op_xset::operator(); };
-struct op_mulset : op_xset<op_mul, parser::mulset>	{ using op_xset::operator(); };
-struct op_divset : op_xset<op_div, parser::divset>	{ using op_xset::operator(); };
+struct v_addset : v_xset<v_add, parser::plusset>	{ using v_xset::operator(); };
+struct v_subset : v_xset<v_sub, parser::minusset>	{ using v_xset::operator(); };
+struct v_mulset : v_xset<v_mul, parser::mulset>	{ using v_xset::operator(); };
+struct v_divset : v_xset<v_div, parser::divset>	{ using v_xset::operator(); };
+
+op_info op_ppx{ parser::token::unaryplus,	associativity::right, dereference::none,  [](value_t& x, value_t& y) { return std::visit(v_ppx(), x, y); } };
+op_info op_mmx{ parser::token::unaryminus,	associativity::right, dereference::none,  [](value_t& x, value_t& y) { return std::visit(v_mmx(), x, y); } };
+op_info op_xpp{ parser::token::unaryplus,	associativity::none,  dereference::right, [](value_t& x, value_t& y) { return std::visit(v_xpp(), x, y); } };
+op_info op_xmm{ parser::token::unaryminus,	associativity::none,  dereference::right, [](value_t& x, value_t& y) { return std::visit(v_xmm(), x, y); } };
+op_info op_addset{ parser::token::plusset,	associativity::right, dereference::right, [](value_t& x, value_t& y) { return std::visit(v_addset(), x, y); } };
+op_info op_subset{ parser::token::minusset,	associativity::right, dereference::right, [](value_t& x, value_t& y) { return std::visit(v_subset(), x, y); } };
+op_info op_mulset{ parser::token::mulset,	associativity::right, dereference::right, [](value_t& x, value_t& y) { return std::visit(v_mulset(), x, y); } };
+op_info op_divset{ parser::token::divset,	associativity::right, dereference::right, [](value_t& x, value_t& y) { return std::visit(v_divset(), x, y); } };
 
 #pragma endregion  // ++, --, +=, -=, *=, /=
 
 #pragma region Objects
 
-struct op_assign : op_base {
+struct v_assign : op_base {
 	const parser::token token = parser::token::assign;
 	const associativity assoc = associativity::right;
 	const dereference deref = dereference::right;
@@ -373,28 +405,28 @@ struct op_assign : op_base {
 	using op_base::operator();
 };
 
-struct op_call : op_base	{
+struct v_call : op_base	{
 	const parser::token token = parser::token::lpar;
 	const dereference deref = dereference::right;
 	template<class Y> value_t operator()(object_ptr x, Y y) { return x->call(y); }
 	using op_base::operator();
 };
 
-struct op_index : op_base {
+struct v_index : op_base {
 	const parser::token token = parser::token::lsquare;
 	const dereference deref = dereference::right;
 	template<class Y> value_t operator()(object_ptr x, Y y) { return x->index(y); }
 	using op_base::operator();
 };
 
-struct op_item : op_base {
+struct v_item : op_base {
 	const parser::token token = parser::token::dot;
 	const dereference deref = dereference::right;
 	value_t operator()(object_ptr x, string_t y) { return x->item(y); }
 	using op_base::operator();
 };
 
-struct op_new : op_base {
+struct v_new : op_base {
 	const parser::token token = parser::token::newobj;
 	const dereference deref = dereference::none;
 	const associativity assoc = associativity::right;
@@ -402,11 +434,18 @@ struct op_new : op_base {
 	using op_base::operator();
 };
 
-struct op_statmt : op_base	{
+struct v_statmt : op_base	{
 	const parser::token token = parser::token::stmt;
 	//template<class X> value_t operator()(X x, std::monostate) { return { x }; }
 	template<class X, class Y> value_t operator()(X x, Y y)	{ return { y }; }
 };
+
+op_info op_assign{	parser::token::assign,	associativity::right,dereference::right, [](value_t& x, value_t& y) { return std::visit(v_assign(), x, y); } };
+op_info op_call{	parser::token::lpar,	associativity::left, dereference::right, [](value_t& x, value_t& y) { return std::visit(v_call(), x, y); } };
+op_info op_index{	parser::token::lsquare,	associativity::left, dereference::right, [](value_t& x, value_t& y) { return std::visit(v_index(), x, y); } };
+op_info op_item{	parser::token::dot,		associativity::left, dereference::right, [](value_t& x, value_t& y) { return std::visit(v_item(), x, y); } };
+op_info op_new{		parser::token::newobj,	associativity::right,dereference::none,  [](value_t& x, value_t& y) { return std::visit(v_new(), x, y); } };
+op_info op_stmt{	parser::token::stmt,	associativity::left, dereference::both,  [](value_t& x, value_t& y) { return std::visit(v_statmt(), x, y); } };
 
 #pragma endregion      // ;, =, call, index, item, new
 
@@ -420,13 +459,13 @@ public:
 	value_t call(value_t params) { return _left->call(_right->call(params)); }
 };
 
-struct op_dot : op_base {
+struct v_dot : op_base {
 	const parser::token token = parser::token::mdot;
 	using op_base::operator();
 	value_t operator()(object_ptr x, object_ptr y) { return std::make_shared<composer>(x, y); }
 };
 
-struct op_head : op_base {
+struct v_head : op_base {
 	const parser::token token = parser::token::apo;
 	const associativity assoc = associativity::right;
 	const dereference deref = dereference::right;
@@ -438,7 +477,7 @@ struct op_head : op_base {
 	}
 };
 
-struct op_tail : op_base {
+struct v_tail : op_base {
 	const parser::token token = parser::token::apo;
 	const associativity assoc = associativity::none;
 	template<class X, class Y> value_t operator()(X x, Y) { return value_t{}; }
@@ -448,7 +487,7 @@ struct op_tail : op_base {
 	}
 };
 
-struct op_join : op_base {
+struct v_join : op_base {
 	const parser::token token = parser::token::colon;
 	template<class X, class Y> value_t operator()(X x, Y y) { 
 		if(is_empty(x))	return { y };
@@ -474,6 +513,12 @@ struct op_join : op_base {
 		}
 	}
 };
+
+op_info op_dot{  parser::token::mdot,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_dot(), x, y); } };
+op_info op_head{ parser::token::apo,	associativity::right,dereference::right,[](value_t& x, value_t& y) { return std::visit(v_head(), x, y); } };
+op_info op_tail{ parser::token::apo,	associativity::none, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_tail(), x, y); } };
+op_info op_join{ parser::token::colon,	associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_join(), x, y); } };
+
 #pragma endregion   // ·, `, :
 
 }
