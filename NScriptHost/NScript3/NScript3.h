@@ -110,8 +110,6 @@ public:
 	void check_pair(token token);
 	token next();
 private:
-	typedef std::unordered_map<string_t, token> Keywords;
-	static Keywords	_keywords;
 	int			_decpt = std::use_facet<std::numpunct<char>>(std::locale()).decimal_point();
 	token			_token;
 	string_t		_content;
@@ -138,6 +136,11 @@ struct op_info
 	value_t(*paction) (value_t& x, value_t& y) = nullptr;
 };
 
+struct error_info {
+	string_t content;
+	size_t	 position;
+};
+
 // Main class for executing scripts
 class nscript
 {
@@ -147,6 +150,7 @@ public:
 	~nscript(void)					{};
 	value_t eval(string_view script);
 	void add(string_t name, value_t object)	{ _context.set(name, object); }
+	error_info get_error_info()		{ return { _parser.get_content(0, -1), _parser.get_state() }; }
 
 protected:
 	enum Precedence	{Script = 0,Statement,Assignment,Conditional,Logical,Binary,Equality,Relation,Addition,Multiplication,Power,Unary,Functional,Primary,Term};

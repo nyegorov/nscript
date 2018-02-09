@@ -1,16 +1,6 @@
 #include "stdafx.h"
-#include <array>
-#include <ctime>
-#include <iomanip>
-#include <locale>
-#include <limits>
 #include <algorithm>
-#include <functional>
 #include <sstream>
-#include <tuple>
-#include <math.h>
-#include <time.h>
-#include <assert.h>
 #include "nscript3.h"
 #include "nobjects.h"
 #include "noperators.h"
@@ -118,16 +108,16 @@ context::vars_t	context::_globals {
 	{ "hex",	make_fn(1, [](const params_t& args) { std::stringstream str; str << std::hex << to_int(args.front()); return str.str(); }) },
 	{ "rgb",	make_fn(3, [](const params_t& args) { return to_int(args[2]) * 65536 + to_int(args[1]) * 256 + to_int(args[0]); }) },
 	// Array
-	{ "size",	make_fn(-1, [](const params_t& args){ return (int)args.size(); }) },
+	{ "size",	make_fn(-1,[](const params_t& args){ return (int)args.size(); }) },
 	{ "add",	make_fn(2, [](const params_t& args) { auto a = to_array(args[0]); return a->items().push_back(args[1]), a; }) },
 	{ "remove",	make_fn(2, [](const params_t& args) { auto a = to_array(args[0]); return a->items().erase( a->items().begin() + to_int(args[1])), a; }) },
-	{ "min",	make_fn(-1, [](const params_t& args) { auto pe = std::min_element(begin(args), end(args), std::less<nscript3::value_t>()); return pe == end(args) ? value_t{} : *pe; }) },
-	{ "max",	make_fn(-1, [](const params_t& args) { auto pe = std::max_element(begin(args), end(args), std::less<nscript3::value_t>()); return pe == end(args) ? value_t{} : *pe; }) },
+	{ "min",	make_fn(-1,[](const params_t& args) { auto pe = std::min_element(begin(args), end(args), std::less<nscript3::value_t>()); return pe == end(args) ? value_t{} : *pe; }) },
+	{ "max",	make_fn(-1,[](const params_t& args) { auto pe = std::max_element(begin(args), end(args), std::less<nscript3::value_t>()); return pe == end(args) ? value_t{} : *pe; }) },
 	{ "fold",	make_fn(1, [](const params_t& args) { return std::make_shared<fold_function>(std::get<object_ptr>(args[0])); }) },
 	{ "map",	make_fn(1, [](const params_t& args) { return std::make_shared<map_function>(std::get<object_ptr>(args[0])); }) },
 	{ "filter",	make_fn(1, [](const params_t& args) { return std::make_shared<filter_function>(std::get<object_ptr>(args[0])); }) },
-	{ "head",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : args.front(); }) },
-	{ "tail",	make_fn(-1, [](const params_t& args) { return args.empty() ? value_t{} : std::make_shared<v_array>(args.begin() + 1, args.end()); }) },
+	{ "head",	make_fn(-1,[](const params_t& args) { return args.empty() ? value_t{} : args.front(); }) },
+	{ "tail",	make_fn(-1,[](const params_t& args) { return args.empty() ? value_t{} : std::make_shared<v_array>(args.begin() + 1, args.end()); }) },
 };
 
 context::context(const context *base, const var_names *vars) : _locals(1)
@@ -235,7 +225,7 @@ bool nscript::apply_op(Precedence level, const op_info& op, value_t& result, boo
 		if(op.deref == dereference::left || op.deref == dereference::both)	*result;
 		if(op.deref == dereference::right || op.deref == dereference::both)	*right;
 
-		if(!skip)	result = op.paction(result, right);								// perform operator's action
+		if(!skip)	result = op.paction(result, right);										// perform operator's action
 		return true;
 	}
 	return false;
@@ -302,9 +292,7 @@ void nscript::parse(Precedence level, value_t& result, bool skip)
 			for(auto& op : s_operators[level]) found |= apply_op(level, op, result, skip);
 		} while(found && level != Unary);
 
-		if(!found && level == Unary) {
-			parse(Functional, result, skip);
-		}
+		if(!found && level == Unary) parse(Functional, result, skip);
 	}
 }
 
@@ -384,7 +372,7 @@ void nscript::parse_obj(value_t& result, bool skip)
 
 #pragma region Parser
 
-parser::Keywords parser::_keywords = {
+const std::unordered_map<string_t, parser::token> s_keywords = {
 	{ "for",	parser::forloop },
 	{ "if",		parser::iffunc },
 	{ "else",	parser::ifelse },
@@ -439,8 +427,7 @@ parser::token parser::next()
 				read_number(c);
 			}	else	{
 				read_name(c);
-				auto p = _keywords.find(_name);
-				_token = p == _keywords.end() ? name : _token = p->second;
+				if(auto p = s_keywords.find(_name); p != s_keywords.end())	_token = p->second; else _token = name;
 			}
 			break;
 	}
@@ -508,9 +495,9 @@ void parser::read_string(int quote)	{
 // Parse object name from input stream
 void parser::read_name(int c)	
 {
-	if(!isalpha(unsigned char(c)) && c != '@' && c != '_')		throw std::system_error(errc::syntax_error, "name");
+	if(!isalpha(c) && c != '@' && c != '_')		throw std::system_error(errc::syntax_error, "name");
 	_name = c;
-	while(isalnum(unsigned char(c = read())) || c == '_')	_name += c;
+	while(isalnum(c = read()) || c == '_')	_name += c;
 	back();
 }
 
