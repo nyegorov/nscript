@@ -110,15 +110,13 @@ public:
 	void check_pair(token token);
 	token next();
 private:
-	typedef std::unordered_map<string_t, token> Keywords;
-	static Keywords	_keywords;
 	int			_decpt = std::use_facet<std::numpunct<char>>(std::locale()).decimal_point();
-	token			_token;
-	string_t		_content;
-	state			_pos = 0;
-	state			_lastpos = 0;
-	value_t			_value;
-	string_t		_name;
+	token		_token;
+	string_t	_content;
+	state		_pos = 0;
+	state		_lastpos = 0;
+	value_t		_value;
+	string_t	_name;
 
 	int peek()			{ if(_pos >= _content.length())	return 0; int c = _content[_pos]; return c < 0 ? c + 256 : c; }
 	int read()			{auto c = peek(); _pos++; return c;}
@@ -126,6 +124,12 @@ private:
 	void read_string(int quote);
 	void read_number(int c);
 	void read_name(int c);
+};
+
+
+struct error_info {
+	string_t content;
+	size_t	 position;
 };
 
 // Main class for executing scripts
@@ -137,20 +141,21 @@ public:
 	~nscript(void)					{};
 	value_t eval(string_view script);
 	void add(string_t name, value_t object)	{ _context.set(name, object); }
+	error_info get_error_info() { return { _parser.get_content(0, -1), _parser.get_state() }; }
 
 protected:
 	enum Precedence	{Script = 0,Statement,Assignment,Conditional,Logical,Binary,Equality,Relation,Addition,Multiplication,Power,Unary,Functional,Primary,Term};
 	friend class user_class;
 	friend class user_function;
 
-	template <Precedence L> void parse(value_t& result, bool skip);
-	template <Precedence L> void parse(parser::state state, value_t& result);
-	template <Precedence L> void parse_if(value_t& result, bool skip);
+	template <Precedence> void parse(value_t& result, bool skip);
+	template <Precedence> void parse(parser::state state, value_t& result);
+	template <Precedence> void parse_if(value_t& result, bool skip);
 	void parse_args(args_list& args, bool force_args);
 	void parse_func(value_t& result, bool skip);
 	void parse_for(value_t& result, bool skip);
 	void parse_obj(value_t& result, bool skip);
-	template <Precedence L, class OP> bool apply_op(OP op, value_t& result, bool skip);
+	template <Precedence, class OP> bool apply_op(OP op, value_t& result, bool skip);
 
 	parser				_parser;
 	context				_context;

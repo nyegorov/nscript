@@ -1,15 +1,6 @@
 #include "stdafx.h"
-#include <ctime>
-#include <iomanip>
-#include <locale>
-#include <limits>
 #include <algorithm>
-#include <functional>
 #include <sstream>
-#include <tuple>
-#include <math.h>
-#include <time.h>
-#include <assert.h>
 #include "nscript3.h"
 #include "nobjects.h"
 #include "noperators.h"
@@ -391,7 +382,7 @@ void nscript::parse_obj(value_t& result, bool skip)
 
 #pragma region Parser
 
-parser::Keywords parser::_keywords = {
+static std::unordered_map<string_t, parser::token> s_keywords = {
 	{ "for",	parser::forloop },
 	{ "if",		parser::iffunc },
 	{ "else",	parser::ifelse },
@@ -446,8 +437,7 @@ parser::token parser::next()
 				read_number(c);
 			}	else	{
 				read_name(c);
-				auto p = _keywords.find(_name);
-				_token = p == _keywords.end() ? name : _token = p->second;
+				if(auto p = s_keywords.find(_name); p != s_keywords.end()) _token = p->second; else _token = name;
 			}
 			break;
 	}
@@ -515,9 +505,9 @@ void parser::read_string(int quote)	{
 // Parse object name from input stream
 void parser::read_name(int c)	
 {
-	if(!isalpha(unsigned char(c)) && c != '@' && c != '_')		throw std::system_error(errc::syntax_error, "name");
+	if(!isalpha(c) && c != '@' && c != '_')		throw std::system_error(errc::syntax_error, "name");
 	_name = c;
-	while(isalnum(unsigned char(c = read())) || c == '_')	_name += c;
+	while(isalnum(c = read()) || c == '_')	_name += c;
 	back();
 }
 
