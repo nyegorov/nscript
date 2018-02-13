@@ -151,13 +151,14 @@ protected:
 	template <Precedence> void parse(value_t& result, bool skip);
 	template <Precedence> void parse(parser::state state, value_t& result);
 	template <Precedence> void parse_if(value_t& result, bool skip);
-	void parse_args(args_list& args, bool force_args);
+	void parse_args(args_list& args);
 	void parse_func(value_t& result, bool skip);
 	void parse_for(value_t& result, bool skip);
 	void parse_obj(value_t& result, bool skip);
 	template <Precedence, class OP> bool apply_op(OP op, value_t& result, bool skip);
 
 	parser				_parser;
+
 	context				_context;
 	context::var_names	_varnames;
 

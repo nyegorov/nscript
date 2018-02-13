@@ -183,9 +183,8 @@ value_t nscript::eval(std::string_view script)
 }
 
 // Parse comma-separated arguments list
-void nscript::parse_args(args_list& args, bool force_args) {
+void nscript::parse_args(args_list& args) {
 	auto token = _parser.next();
-	if(token != parser::lpar && !force_args) return;		// function without parameters
 	if(token == parser::lpar)	_parser.next();
 
 	while(_parser.get_token() == parser::name) {
@@ -354,7 +353,7 @@ void nscript::parse_for(value_t& result, bool skip) {
 void nscript::parse_func(value_t& result, bool skip)
 {
 	args_list args;
-	parse_args(args, _parser.get_token() == parser::lambda);
+	parse_args(args);
 	parser::state state = _parser.get_state();
 	if(_parser.get_token() == parser::end)	throw std::system_error(errc::syntax_error, "'fn'");
 	// _varnames contains list of variables to be captured by function
@@ -367,7 +366,7 @@ void nscript::parse_func(value_t& result, bool skip)
 void nscript::parse_obj(value_t& result, bool skip)
 {
 	args_list args;
-	parse_args(args, false);
+	parse_args(args);
 	if(_parser.get_token() == parser::lcurly)	_parser.next();
 	parser::state state = _parser.get_state();
 	if(_parser.get_token() == parser::end)	throw std::system_error(errc::syntax_error, "'object'");

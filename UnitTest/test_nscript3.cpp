@@ -125,7 +125,7 @@ public:
 	TEST_METHOD(Functional)
 	{
 		Assert::AreEqual("15", eval("sum = fold(fn(x,y) x+y); sum([4,5,6])").c_str());
-		Assert::AreEqual("36", eval("fold(fn(x,y) x*y)(map(fn @^2)([1,2,3]))").c_str());
+		Assert::AreEqual("36", eval("fold(fn(x,y) x*y)(map(fn() @^2)([1,2,3]))").c_str());
 		Assert::AreEqual("35", eval(R"(
 				odds   = \x x%2==1; 
 				square = \@ @^2; 
@@ -142,7 +142,7 @@ public:
 		Assert::AreEqual("[1; 1; 2; 3; 3; 4; 5]", eval(R"(
 				greater = \x filter(\y y > x);
 				lesse   = \x filter(\y y <= x);
-				qsort   = fn @ == [] ? [] : [@` | lesse(`@) | qsort : `@ : @` | greater(`@) | qsort];
+				qsort   = fn() @ == [] ? [] : [@` | lesse(`@) | qsort : `@ : @` | greater(`@) | qsort];
 				[2,1,5,4,3,1,3] | qsort
 			)").c_str());
 		Assert::AreEqual("[* NSCRIPT *; * LISP *; * COQ *]", eval(R"(
