@@ -1,10 +1,18 @@
 #include "pch.h"
 #include "CppUnitTest.h"
-
 #include "../NScriptHost/NScript3/NScript3.h"
 
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 using namespace std;
+
+namespace Microsoft::VisualStudio::CppUnitTestFramework {
+template<> inline std::wstring ToString<std::error_code>(const std::error_code& e)	{
+	wstring str;
+	str.resize(MultiByteToWideChar(CP_UTF8, 0, e.message().c_str(), -1, 0, 0));
+	MultiByteToWideChar(CP_UTF8, 0, e.message().c_str(), -1, str.data(), str.size());
+	return str;
+}
+}
 
 namespace UnitTest
 {
@@ -173,29 +181,29 @@ public:
 	TEST_METHOD(Errors)
 	{
 		Assert::AreEqual("')': missing character", eval("(1,2").c_str());
-		Assert::IsTrue(nscript3::errc::missing_character == eval_hr("(1,2"));
-		Assert::IsTrue(nscript3::errc::missing_character == eval_hr("{c=1"));
-		Assert::IsTrue(nscript3::errc::missing_character == eval_hr("[1,2"));
-//		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("5+"));
-//		Assert::IsTrue(nscript3::errc::unknown_var == eval_hr("x+2"));
-		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("object(x) {"));
-		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("sub(x,$);"));
-		Assert::IsTrue(std::errc::not_supported == eval_hr("(new object {})(0)"));
-		Assert::IsTrue(std::errc::not_supported == eval_hr("(new object {})=1"));
-		Assert::IsTrue(std::errc::not_supported == eval_hr("(new object {})[0]"));
-		Assert::IsTrue(std::errc::not_supported == eval_hr("new (new object)"));
-		Assert::IsTrue(nscript3::errc::bad_param_count == eval_hr("new (object(x,y) {})()"));
-		Assert::IsTrue(nscript3::errc::bad_param_count == eval_hr("sin(1,2)"));
-		Assert::IsTrue(std::errc::invalid_argument == eval_hr("x=1;;;;x[5]"));
-		Assert::IsTrue(std::errc::operation_not_supported == eval_hr("1[5]"));
+		Assert::AreEqual(make_error_code(nscript3::errc::missing_character), eval_hr("(1,2"));
+		Assert::AreEqual(make_error_code(nscript3::errc::missing_character), eval_hr("{c=1"));
+		Assert::AreEqual(make_error_code(nscript3::errc::missing_character), eval_hr("[1,2"));
+//		Assert::AreEqual(make_error_code(nscript3::errc::syntax_error), eval_hr("5+"));
+//		Assert::AreEqual(make_error_code(nscript3::errc::unknown_var), eval_hr("x+2"));
+		Assert::AreEqual(make_error_code(nscript3::errc::syntax_error), eval_hr("object(x) {"));
+		Assert::AreEqual(make_error_code(nscript3::errc::syntax_error), eval_hr("sub(x,$);"));
+		Assert::AreEqual(make_error_code(std::errc::not_supported), eval_hr("(new object {})(0)"));
+		Assert::AreEqual(make_error_code(std::errc::not_supported), eval_hr("(new object {})=1"));
+		Assert::AreEqual(make_error_code(std::errc::not_supported), eval_hr("(new object {})[0]"));
+		Assert::AreEqual(make_error_code(std::errc::not_supported), eval_hr("new (new object())"));
+		Assert::AreEqual(make_error_code(nscript3::errc::bad_param_count), eval_hr("new (object(x,y) {})()"));
+		Assert::AreEqual(make_error_code(nscript3::errc::bad_param_count), eval_hr("sin(1,2)"));
+		Assert::AreEqual(make_error_code(std::errc::invalid_argument), eval_hr("x=1;;;;x[5]"));
+		Assert::AreEqual(make_error_code(std::errc::operation_not_supported), eval_hr("1[5]"));
 		Assert::AreEqual("bad variant access", eval("(new hash)[0]()").c_str());
 		Assert::AreEqual("bad variant access", eval("(new hash)[0].x").c_str());
 		Assert::AreEqual("bad variant access", eval("(new hash)[0][0]").c_str());
-		Assert::IsTrue(nscript3::errc::runtime_error == eval_hr("a=[];a[0x7fffffff]=1"));
-		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("1e2.3"));
-		Assert::IsTrue(nscript3::errc::syntax_error == eval_hr("1e2e3"));
-		Assert::IsTrue(std::errc::value_too_large == eval_hr("0x1ffffffffffffffff"));
-		Assert::IsTrue(std::errc::value_too_large == eval_hr("999999999999999999999999999"));
+		Assert::AreEqual(make_error_code(nscript3::errc::runtime_error), eval_hr("a=[];a[0x7fffffff]=1"));
+		Assert::AreEqual(make_error_code(nscript3::errc::syntax_error), eval_hr("1e2.3"));
+		Assert::AreEqual(make_error_code(nscript3::errc::syntax_error), eval_hr("1e2e3"));
+		Assert::AreEqual(make_error_code(std::errc::value_too_large), eval_hr("0x1ffffffffffffffff"));
+		Assert::AreEqual(make_error_code(std::errc::value_too_large), eval_hr("999999999999999999999999999"));
 	}
 
 };

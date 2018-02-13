@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iomanip>
 #include "nscript3.h"
 
 namespace nscript3 {
@@ -148,10 +149,6 @@ date_t to_date(value_t v)
 struct op_add : op_base {
 	const parser::token token = parser::token::plus;
 	using op_base::operator();
-	template<class Y> value_t operator()(object_ptr x, Y y)	{ return std::visit([this, y](auto x) { return operator()(x, y); }, x->get()); }
-	template<class X> value_t operator()(X x, object_ptr y) { return std::visit([this, x](auto y) { return operator()(x, y); }, y->get()); }
-	value_t operator()(object_ptr x, object_ptr y)			{ return std::visit([this](auto x, auto y) { return operator()(x, y); }, x->get(), y->get()); }
-
 	value_t operator()(int x, int y)		{ return x + y; }
 	value_t operator()(int x, double y)		{ return x + y; }
 	value_t operator()(double x, int y)		{ return x + y; }
@@ -166,10 +163,6 @@ struct op_add : op_base {
 struct op_sub : op_base {
 	const parser::token token = parser::token::minus;
 	using op_base::operator();
-	template<class Y> value_t operator()(object_ptr x, Y y) { return std::visit([this, y](auto x) { return operator()(x, y); }, x->get()); }
-	template<class X> value_t operator()(X x, object_ptr y) { return std::visit([this, x](auto y) { return operator()(x, y); }, y->get()); }
-	value_t operator()(object_ptr x, object_ptr y)			{ return std::visit([this](auto x, auto y) { return operator()(x, y); }, x->get(), y->get()); }
-
 	value_t operator()(int x, int y)		{ return { x - y }; }
 	value_t operator()(int x, double y)		{ return { x - y }; }
 	value_t operator()(double x, int y)		{ return { x - y }; }
