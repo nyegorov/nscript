@@ -50,7 +50,7 @@ params_t* to_array_if(const value_t& v)
 
 array_ptr to_array(const value_t& v)
 {
-	if(auto pobj = std::get_if<object_ptr>(&v); pobj)
+	if(auto pobj = std::get_if<object_ptr>(&v); pobj && pobj->get())
 		if(auto parr = std::dynamic_pointer_cast<v_array>(*pobj); parr)	return parr;
 	return is_empty(v) ? std::make_shared<v_array>() 
 					   : std::make_shared<v_array>(std::initializer_list<value_t>{ v });
@@ -58,7 +58,7 @@ array_ptr to_array(const value_t& v)
 
 // 'dereference' object. If v holds an ext. object, replace it with the value of object
 value_t& operator *(value_t& v)	{
-	if(auto pobj = std::get_if<object_ptr>(&v)) {
+	if(auto pobj = std::get_if<object_ptr>(&v); pobj && pobj->get()) {
 		v = (*pobj)->get();
 	}
 	return v;
@@ -447,8 +447,7 @@ parser::token parser::next()
 		case '}':	_token = rcurly;break;
 		case '[':	_token = lsquare;break;
 		case ']':	_token = rsquare;break;
-//		case '#':	_token = value; read_string(c); _value = to_date(_value); break;
-		case '`':	_token = apo; break;
+/		case '`':	_token = apo; break;
 		case 0xB7:	_token = mdot; break;
 		case '\"':
 		case '\'':	_token = value; read_string(c);break;
