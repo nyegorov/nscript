@@ -20,7 +20,7 @@ struct op_null : op_base { };
 
 #pragma region Conversion
 
-tm date2tm(date_t date)
+tm date2tm(std::chrono::system_clock::time_point date)
 {
 	auto t = std::chrono::system_clock::to_time_t(date);
 	tm tm = { 0 };
@@ -39,23 +39,10 @@ std::string to_string(value_t v)
 			return ss.str();
 		}
 		string operator() (string s) { return s; }
-		string operator() (nscript3::date_t dt) {
-			auto tm = date2tm(dt);
-			std::stringstream ss;
-			bool is_date = !(tm.tm_mday == 1 && tm.tm_mon == 0 && tm.tm_year == 70);
-			bool is_time = tm.tm_hour || tm.tm_min || tm.tm_sec;
-			if(is_date)		ss << std::put_time(&tm, "%d.%m.%Y");
-			if(is_time)		ss << (is_date ? " " : "") << std::put_time(&tm, tm.tm_sec ? "%H:%M:%S" : "%H:%M");
-			return ss.str();
-		}
 		string operator() (nscript3::object_ptr o) {
 			auto v = o->get();
 			if(auto po = std::get_if<object_ptr>(&v); *po != o)	return to_string(v);
 			return o->print();
-		}
-		string operator() (std::exception_ptr pex) {
-			try { std::rethrow_exception(pex); } catch(const std::exception& ex) { return ex.what(); }
-			return "unknown exception";
 		}
 	};
 
@@ -69,9 +56,7 @@ int to_int(value_t v)
 		int operator() (int i) { return i; }
 		int operator() (double d) { return (int)(d + 0.5); }
 		int operator() (string s) { return std::stoi(s); }
-		int operator() (date_t dt) { throw std::system_error(errc::type_mismatch, "to_int"); }
 		int operator() (object_ptr o) { throw std::system_error(errc::type_mismatch, "to_int"); }
-		int operator() (std::exception_ptr) { throw std::system_error(errc::type_mismatch, "to_int"); }
 	};
 	return std::visit(to_int_t(), v);
 }
@@ -83,14 +68,12 @@ double to_double(value_t v)
 		double operator() (int i) { return i; }
 		double operator() (double d) { return d; }
 		double operator() (string s) { return std::stod(s); }
-		double operator() (date_t dt) { throw std::system_error(errc::type_mismatch, "to_double"); }
 		double operator() (object_ptr o) { throw std::system_error(errc::type_mismatch, "to_double"); }
-		double operator() (std::exception_ptr) { throw std::system_error(errc::type_mismatch, "to_double"); }
 	};
 	return std::visit(to_double_t(), v);
 }
 
-date_t to_date(const string& s)
+tm to_date(const string& s)
 {
 	enum date_stage { day = 0, mon, year, hour, min, sec } stage = day;
 	int date[6] = { 0 };
@@ -124,22 +107,13 @@ date_t to_date(const string& s)
 	tm.tm_hour = date[3];
 	tm.tm_min = date[4];
 	tm.tm_sec = date[5];
-	auto time = std::mktime(&tm);
-	return std::chrono::system_clock::from_time_t(time);
+	mktime(&tm);
+	return tm;
 }
 
-date_t to_date(value_t v)
+tm to_date(value_t v)
 {
-	struct to_date_t {
-		date_t operator() (std::monostate) { throw std::system_error(errc::type_mismatch, "to_date"); }
-		date_t operator() (int) { throw std::system_error(errc::type_mismatch, "to_date"); }
-		date_t operator() (double) { throw std::system_error(errc::type_mismatch, "to_date"); }
-		date_t operator() (string s) { return to_date(s); }
-		date_t operator() (date_t dt) { return dt; }
-		date_t operator() (object_ptr) { throw std::system_error(errc::type_mismatch, "to_date"); }
-		date_t operator() (std::exception_ptr) { throw std::system_error(errc::type_mismatch, "to_date"); }
-	};
-	return std::visit(to_date_t(), v);
+	return to_date(to_string(v));
 }
 
 #pragma endregion

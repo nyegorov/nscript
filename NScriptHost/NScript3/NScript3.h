@@ -47,21 +47,19 @@ struct i_object;
 class v_array;
 using std::string_view;
 using string_t = std::string;
-using date_t = std::chrono::system_clock::time_point;
 using object_ptr = std::shared_ptr<i_object>;
 using array_ptr = std::shared_ptr<v_array>;
-using value_t = std::variant<std::monostate, int, double, string_t, date_t, object_ptr, std::exception_ptr>;
+using value_t = std::variant<std::monostate, int, double, string_t, object_ptr>;
 using params_t = std::vector<value_t>;
 
 std::string to_string(value_t v);
 int to_int(value_t v);
 double to_double(value_t v);
-date_t to_date(value_t v);
+tm to_date(value_t v);
 params_t* to_array_if(const value_t& v);
 params_t* to_array_if(const object_ptr& o);
 array_ptr to_array(const value_t& v);
 inline bool is_empty(const value_t& v) { return v.index() == 0; }
-inline const std::exception_ptr failed(const value_t& v) { if(auto pe = std::get_if<std::exception_ptr>(&v); pe) return *pe; return {}; }
 
 // Interface for extension objects
 struct i_object {
@@ -128,8 +126,9 @@ private:
 
 
 struct error_info {
-	string_t content;
-	size_t	 position;
+	std::error_code	code;
+	string_t		content;
+	size_t			position;
 };
 
 // Main class for executing scripts
@@ -139,9 +138,9 @@ public:
 	nscript(string_view script, const context *pcontext = nullptr) : _context(pcontext)	{_parser.init(script);}
 	nscript() : _context(nullptr)	{}
 	~nscript(void)					{};
-	value_t eval(string_view script);
+	std::tuple<bool, value_t> eval(string_view script);
 	void add(string_t name, value_t object)	{ _context.set(name, object); }
-	error_info get_error_info() { return { _parser.get_content(0, -1), _parser.get_state() }; }
+	error_info get_error_info() { return { _last_error, _parser.get_content(0, -1), _parser.get_state() }; }
 
 protected:
 	enum Precedence	{Script = 0,Statement,Assignment,Conditional,Logical,Binary,Equality,Relation,Addition,Multiplication,Power,Unary,Functional,Primary,Term};
@@ -161,7 +160,7 @@ protected:
 
 	context				_context;
 	context::var_names	_varnames;
-
+	std::error_code		_last_error;
 };
 
 // Generic implementation of i_object interface

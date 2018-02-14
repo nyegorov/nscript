@@ -119,8 +119,11 @@ public:
 	value_t call(value_t params) {
 		nscript script(_body, &_context);
 		process_args(_args, params, script);
-		auto res = script.eval({});
-		if(auto pe = failed(res); pe)	std::rethrow_exception(pe);
+/*		auto [ok, res] = script.eval({});
+		if(!ok)	throw std::system_error(script.get_error_info().code, to_string(res));
+		return res;*/
+		value_t res;
+		script.parse<nscript::Script>(res, false);
 		return res;
 	}
 };
@@ -142,10 +145,9 @@ public:
 	public:
 		instance(string_view body, const context *pcontext, const args_list& args, value_t params) : _script(body, pcontext) {
 			process_args(args, params, _script);
-			//auto res = _script.eval({});
 			_script.parse<nscript::Script>(value_t{}, false);
 		}
-		value_t item(string_t item)	{ return _script.eval(item); }
+		value_t item(string_t item)	{ return std::get<value_t>(_script.eval(item)); }
 	};
 };
 

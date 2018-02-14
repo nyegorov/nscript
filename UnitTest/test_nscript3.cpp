@@ -17,25 +17,17 @@ template<> inline std::wstring ToString<std::error_code>(const std::error_code& 
 namespace UnitTest
 {
 
-//template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
-//template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
-
 TEST_CLASS(NScript3Test)
 {
 	std::error_code eval_hr(const char *expr) {
 		nscript3::nscript ns;
-		auto v = ns.eval(expr);
-		try {
-			if(auto pe = failed(v); pe)	std::rethrow_exception(pe);
-		} 
-		catch(const std::system_error& se)	{ return se.code(); }
-		catch(...)							{ return nscript3::errc::runtime_error; }
-		return nscript3::errc::runtime_error;
+		auto[ok, _] = ns.eval(expr); _;
+		return ok ? std::error_code{} : ns.get_error_info().code;
 	}
 
 	string eval(const char *expr) {
 		nscript3::nscript ns;
-		return to_string(ns.eval(expr));
+		return to_string(std::get<nscript3::value_t>(ns.eval(expr)));
 	}
 
 public:
@@ -50,7 +42,7 @@ public:
 		Assert::AreEqual("-1.314", eval("-3.14e-1-1e+0").c_str(), "exp", LINE_INFO());
 		Assert::AreEqual("a\"b\"'c'", eval("'a\"b\"'+\"'c'\"").c_str(), "string", LINE_INFO());
 		Assert::AreEqual("3", eval("a=3;a").c_str(), "variable", LINE_INFO());
-		Assert::AreEqual("26.10.1974", eval("#26.10.74#").c_str(), "date", LINE_INFO());
+		//Assert::AreEqual("26.10.1974", eval("#26.10.74#").c_str(), "date", LINE_INFO());
 		Assert::AreEqual("[1; 2; 3]", eval("[1,2,3]").c_str(), "array", LINE_INFO());
 	}
 	TEST_METHOD(Statements)
@@ -86,14 +78,14 @@ public:
 		// date
 		Assert::AreEqual("26.10.1974", eval("date('26.10.74')").c_str());
 		Assert::AreEqual("1", eval("year(now())>2012").c_str());
-		Assert::AreEqual("26", eval("day(#26.10.74#)").c_str());
-		Assert::AreEqual("10", eval("month(#26.10.74#)").c_str());
-		Assert::AreEqual("1974", eval("year(#26.10.74#)").c_str());
-		Assert::AreEqual("13", eval("hour(#13:15#)").c_str());
-		Assert::AreEqual("15", eval("minute(#13:15:45#)").c_str());
-		Assert::AreEqual("45", eval("second(#13:15:45#)").c_str());
-		Assert::AreEqual("5", eval("dayofweek(#23.08.2013#)").c_str());
-		Assert::AreEqual("235", eval("dayofyear(#23.08.2013#)").c_str());
+		Assert::AreEqual("26", eval("day('26.10.74')").c_str());
+		Assert::AreEqual("10", eval("month('26.10.74')").c_str());
+		Assert::AreEqual("1974", eval("year('26.10.74')").c_str());
+		Assert::AreEqual("13", eval("hour('13:15')").c_str());
+		Assert::AreEqual("15", eval("minute('13:15:45')").c_str());
+		Assert::AreEqual("45", eval("second('13:15:45')").c_str());
+		Assert::AreEqual("5", eval("dayofweek('23.08.2013')").c_str());
+		Assert::AreEqual("235", eval("dayofyear('23.08.2013')").c_str());
 		// math
 		Assert::AreEqual("0", eval("pi()-atan2(1,1)*4").c_str());
 		Assert::AreEqual("0", eval("a=pi()/3;sin(a)/cos(a)-tan(a)").c_str());

@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include <algorithm>
+#include <iomanip>
 #include <sstream>
 #include "nscript3.h"
 #include "nobjects.h"
@@ -24,6 +25,16 @@ const std::error_category& nscript_category()
 
 std::error_code make_error_code(errc e)				{ return std::error_code(static_cast<int>(e), nscript_category()); }
 std::error_condition make_error_condition(errc e)	{ return std::error_condition(static_cast<int>(e), nscript_category()); }
+
+string_t tm2str(tm tm) {
+	int is_date = !(tm.tm_mday == 1 && tm.tm_mon == 0 && tm.tm_year == 70) ? 1 : 0;
+	int is_time = tm.tm_hour || tm.tm_min || tm.tm_sec ? 1 : 0;
+	int is_sec  = tm.tm_sec ? 1 : 0;
+	char *format[8] = { "", "", "%d:%02d" , "%d:%02d:%02d", "%02d.%02d.%04d", "%02d.%02d.%04d", "%02d.%02d.%04d %d:%02d", "%02d.%02d.%04d %d:%02d:%02d"};
+	char buf[32];
+	sprintf_s(buf, format[ is_date * 4 + is_time * 2 + is_sec ], tm.tm_mday, 1 + tm.tm_mon, 1900 + tm.tm_year, tm.tm_hour, tm.tm_min, tm.tm_sec);
+	return buf;
+}
 
 params_t* to_array_if(const object_ptr& o)
 {
@@ -62,17 +73,17 @@ context::vars_t	context::_globals {
 	{ "int",	make_fn(1, [](const params_t& args) { return to_int(args.front()); }) },
 	{ "dbl",	make_fn(1, [](const params_t& args) { return to_double(args.front()); }) },
 	{ "str",	make_fn(1, [](const params_t& args) { return to_string(args.front()); }) },
-	{ "date",	make_fn(1, [](const params_t& args) { return to_date(args.front()); }) },
+	{ "date",	make_fn(1, [](const params_t& args) { return tm2str(to_date(args.front())); }) },
 	// Date
-	{ "now",	make_fn(0, [](const params_t& args) { return std::chrono::system_clock::now(); }) },
-	{ "day",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_mday; }) },
-	{ "month",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_mon + 1; }) },
-	{ "year",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_year + 1900; }) },
-	{ "hour",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_hour; }) },
-	{ "minute",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_min; }) },
-	{ "second",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_sec; }) },
-	{ "dayofweek",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_wday; }) },
-	{ "dayofyear",	make_fn(1, [](const params_t& args) { return date2tm(to_date(args.front())).tm_yday + 1; }) },
+	{ "now",	make_fn(0, [](const params_t& args) { return tm2str(date2tm(std::chrono::system_clock::now())); }) },
+	{ "day",	make_fn(1, [](const params_t& args) { return to_date(args.front()).tm_mday; }) },
+	{ "month",	make_fn(1, [](const params_t& args) { return to_date(args.front()).tm_mon + 1; }) },
+	{ "year",	make_fn(1, [](const params_t& args) { return to_date(args.front()).tm_year + 1900; }) },
+	{ "hour",	make_fn(1, [](const params_t& args) { return to_date(args.front()).tm_hour; }) },
+	{ "minute",	make_fn(1, [](const params_t& args) { return to_date(args.front()).tm_min; }) },
+	{ "second",	make_fn(1, [](const params_t& args) { return to_date(args.front()).tm_sec; }) },
+	{ "dayofweek",	make_fn(1, [](const params_t& args) { return to_date(args.front()).tm_wday; }) },
+	{ "dayofyear",	make_fn(1, [](const params_t& args) { return to_date(args.front()).tm_yday + 1; }) },
 	// Math
 	{ "pi",		make_fn(0, [](const params_t& args) { return 3.14159265358979323846; }) },
 	{ "rnd",	make_fn(0, [](const params_t& args) { return (double)rand() / (double)RAND_MAX; }) },
@@ -167,9 +178,10 @@ static auto s_operators = std::make_tuple(
 	std::tuple<op_xpp, op_xmm, op_call, op_index, op_item, op_tail>()
 );
 
-value_t nscript::eval(std::string_view script)
+std::tuple<bool, value_t> nscript::eval(std::string_view script)
 {
 	value_t result;
+	_last_error.clear();
 	_context.push();
 	try	{
 		_parser.init(script);
@@ -177,9 +189,11 @@ value_t nscript::eval(std::string_view script)
 		if(_parser.get_token() != parser::end)	throw std::system_error(errc::syntax_error, "eval");
 		*result;
 	}
-	catch(...) { result = std::current_exception();	}
+	catch(std::system_error& se){ _last_error = se.code();  return { false, se.what() }; }
+	catch(std::exception& e)	{ _last_error = errc::runtime_error; return { false, e.what() }; }
+	catch(...)					{ _last_error = errc::runtime_error; return { false, {} }; }
 	_context.pop();
-	return result;
+	return { true, result };
 }
 
 // Parse comma-separated arguments list
@@ -424,7 +438,7 @@ parser::token parser::next()
 		case '}':	_token = rcurly;break;
 		case '[':	_token = lsquare;break;
 		case ']':	_token = rsquare;break;
-		case '#':	_token = value; read_string(c); _value = to_date(_value); break;
+//		case '#':	_token = value; read_string(c); _value = to_date(_value); break;
 		case '`':	_token = apo; break;
 		case 0xB7:	_token = mdot; break;
 		case '\"':
