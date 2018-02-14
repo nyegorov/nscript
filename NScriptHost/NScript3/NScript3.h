@@ -49,11 +49,11 @@ using std::string_view;
 using string_t = std::string;
 using object_ptr = std::shared_ptr<i_object>;
 using array_ptr = std::shared_ptr<v_array>;
-using value_t = std::variant<std::monostate, int, double, string_t, object_ptr>;
+using value_t = std::variant<std::monostate, bool, double, string_t, object_ptr>;
 using params_t = std::vector<value_t>;
 
 std::string to_string(value_t v);
-int to_int(value_t v);
+bool to_bool(value_t v);
 double to_double(value_t v);
 tm to_date(value_t v);
 params_t* to_array_if(const value_t& v);

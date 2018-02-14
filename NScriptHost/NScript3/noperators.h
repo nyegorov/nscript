@@ -32,8 +32,8 @@ std::string to_string(value_t v)
 {
 	struct print_value {
 		string operator() (std::monostate) { return ""; }
-		string operator() (int i) { return std::to_string(i); }
 		string operator() (double d) {
+			if(d - (int)d == 0.)	return std::to_string((int)d);
 			std::stringstream ss;
 			ss << d;
 			return ss.str();
@@ -49,23 +49,22 @@ std::string to_string(value_t v)
 	return std::visit(print_value(), v);
 }
 
-int to_int(value_t v)
+bool to_bool(value_t v)
 {
-	struct to_int_t {
-		int operator() (std::monostate) { return 0; }
-		int operator() (int i) { return i; }
-		int operator() (double d) { return (int)(d + 0.5); }
-		int operator() (string s) { return std::stoi(s); }
-		int operator() (object_ptr o) { throw std::system_error(errc::type_mismatch, "to_int"); }
+	struct to_bool_t {
+		bool operator() (std::monostate) { return 0; }
+		bool operator() (bool i) { return i; }
+		bool operator() (double d) { return d != 0; }
+		bool operator() (string s) { return s == "true" || std::stoi(s) != 0; }
+		bool operator() (object_ptr o) { throw std::system_error(errc::type_mismatch, "to_bool"); }
 	};
-	return std::visit(to_int_t(), v);
+	return std::visit(to_bool_t(), v);
 }
 
 double to_double(value_t v)
 {
 	struct to_double_t {
 		double operator() (std::monostate) { return 0.; }
-		double operator() (int i) { return i; }
 		double operator() (double d) { return d; }
 		double operator() (string s) { return std::stod(s); }
 		double operator() (object_ptr o) { throw std::system_error(errc::type_mismatch, "to_double"); }
@@ -123,23 +122,15 @@ tm to_date(value_t v)
 struct op_add : op_base {
 	const parser::token token = parser::token::plus;
 	using op_base::operator();
-	value_t operator()(int x, int y)		{ return x + y; }
-	value_t operator()(int x, double y)		{ return x + y; }
-	value_t operator()(double x, int y)		{ return x + y; }
 	value_t operator()(double x, double y)	{ return x + y; }
 	value_t operator()(string x, string y)	{ return x + y; }
-	value_t operator()(string x, int y)		{ return x + std::to_string(y); }
 	value_t operator()(string x, double y)	{ return x + std::to_string(y); }
-	value_t operator()(int x, string y)		{ return std::to_string(x) + y; }
 	value_t operator()(double x, string y)	{ return std::to_string(x) + y; }
 };
 
 struct op_sub : op_base {
 	const parser::token token = parser::token::minus;
 	using op_base::operator();
-	value_t operator()(int x, int y)		{ return { x - y }; }
-	value_t operator()(int x, double y)		{ return { x - y }; }
-	value_t operator()(double x, int y)		{ return { x - y }; }
 	value_t operator()(double x, double y)	{ return { x - y }; }
 };
 
@@ -147,7 +138,6 @@ struct op_neg : op_base {
 	const parser::token token = parser::token::minus;
 	const associativity assoc = associativity::right;
 	using op_base::operator();
-	template<class X> value_t operator()(X, int y) { return { -y }; }
 	template<class X> value_t operator()(X, double y) { return { -y }; }
 	template<class X> value_t operator()(X x, object_ptr y) { return std::visit([this, x](auto y) { return operator()(x, y); }, y->get()); }
 };
@@ -155,36 +145,24 @@ struct op_neg : op_base {
 struct op_mul : op_base {
 	const parser::token token = parser::token::multiply;
 	using op_base::operator();
-	value_t operator()(int x, int y) { return { x * y }; }
-	value_t operator()(int x, double y) { return { x * y }; }
-	value_t operator()(double x, int y) { return { x * y }; }
 	value_t operator()(double x, double y) { return { x * y }; }
 };
 
 struct op_div : op_base {
 	const parser::token token = parser::token::divide;
 	using op_base::operator();
-	value_t operator()(int x, int y) { return { x / y }; }
-	value_t operator()(int x, double y) { return { x / y }; }
-	value_t operator()(double x, int y) { return { x / y }; }
 	value_t operator()(double x, double y) { return { x / y }; }
 };
 
 struct op_mod : op_base	{
 	const parser::token token = parser::token::mod;
 	using op_base::operator();
-	value_t operator()(int x, int y) { return { x % y }; }
-	value_t operator()(int x, double y) { return fmod(x, y); }
-	value_t operator()(double x, int y) { return fmod(x, y); }
 	value_t operator()(double x, double y) { return fmod( x, y); }
 };
 
 struct op_pow : op_base {
 	const parser::token token = parser::token::pwr;
 	using op_base::operator();
-	value_t operator()(int x, int y) { return { pow(x, y) }; }
-	value_t operator()(int x, double y) { return { pow(x, y) }; }
-	value_t operator()(double x, int y) { return { pow(x, y) }; }
 	value_t operator()(double x, double y) { return { pow(x, y) }; }
 };
 
@@ -195,13 +173,13 @@ struct op_pow : op_base {
 struct op_and : op_base {
 	const parser::token token = parser::token::and;
 	using op_base::operator();
-	value_t operator()(int x, int y) { return { x & y }; }
+	value_t operator()(double x, double y) { return { double(int(x) & int(y)) }; }
 };
 
 struct op_or : op_base {
 	const parser::token token = parser::token::or;
 	using op_base::operator();
-	value_t operator()(int x, int y) { return { x | y }; }
+	value_t operator()(double x, double y) { return { double(int(x) | int(y)) }; }
 	template<class X> value_t operator()(X x, object_ptr y) { 
 		return y->call(x); 
 	}
@@ -211,7 +189,7 @@ struct op_not : op_base {
 	const parser::token token = parser::token::not;
 	const associativity assoc = associativity::right;
 	using op_base::operator();
-	template<class X> value_t operator()(X, int y) { return ~y; }
+	template<class X> value_t operator()(X, double y) { return double(~int(y)); }
 };
 
 #pragma endregion      // &, |, ~
@@ -222,9 +200,7 @@ struct comparator {
 	template<class X> int operator() (std::monostate, X) { return 1; }
 	template<class Y> int operator() (Y, std::monostate) { return -1; }
 	int operator() (std::monostate, std::monostate) { return 0; }
-	int operator() (int i1, int i2) { return i1 < i2 ? -1 : i1 > i2 ? 1 : 0; }
-	int operator() (int i1, double d2) { return i1 < d2 ? -1 : i1 > d2 ? 1 : 0; }
-	int operator() (double d1, int i2) { return d1 < i2 ? -1 : d1 > i2 ? 1 : 0; }
+	int operator() (bool b1, bool b2) { return !b1 && b2 ? -1 : b1 && !b2 ? 1 : 0; }
 	int operator() (double d1, double d2) { return d1 < d2 ? -1 : d1 > d2 ? 1 : 0; }
 	int operator() (string s1, string s2) { return s1.compare(s2); }
 	int operator() (object_ptr o1, object_ptr o2) {
@@ -241,51 +217,51 @@ struct comparator {
 
 struct op_gt : op_base {
 	const parser::token token = parser::token::gt;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x,y) > 0; }
+	template<class X, class Y> bool operator()(X x, Y y) { return comparator()(x, y) > 0; }
 };
 
 struct op_lt : op_base {
 	const parser::token token = parser::token::lt;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x, y) < 0; }
+	template<class X, class Y> bool operator()(X x, Y y) { return comparator()(x, y) < 0; }
 };
 
 struct op_ge : op_base {
 	const parser::token token = parser::token::ge;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x, y) >= 0; }
+	template<class X, class Y> bool operator()(X x, Y y) { return comparator()(x, y) >= 0; }
 };
 
 struct op_le : op_base {
 	const parser::token token = parser::token::le;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x, y) <= 0; }
+	template<class X, class Y> bool operator()(X x, Y y) { return comparator()(x, y) <= 0; }
 };
 
 struct op_eq : op_base {
 	const parser::token token = parser::token::equ;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x, y) == 0; }
+	template<class X, class Y> bool operator()(X x, Y y) { return comparator()(x, y) == 0; }
 };
 
 struct op_ne : op_base {
 	const parser::token token = parser::token::nequ;
-	template<class X, class Y> int operator()(X x, Y y) { return comparator()(x, y) != 0; }
+	template<class X, class Y> bool operator()(X x, Y y) { return comparator()(x, y) != 0; }
 };
 
 struct op_land : op_base {
 	const parser::token token = parser::token::land;
 	using op_base::operator();
-	value_t operator()(int x, int y) { return { x && y }; }
+	value_t operator()(bool x, bool y) { return { x && y }; }
 };
 
 struct op_lor : op_base {
 	const parser::token token = parser::token:: lor ;
 	using op_base::operator();
-	value_t operator()(int x, int y) { return { x || y }; }
+	value_t operator()(bool x, bool y) { return { x || y }; }
 };
 
 struct op_lnot : op_base {
 	const parser::token token = parser::token::lnot;
 	const associativity assoc = associativity::right;
 	using op_base::operator();
-	template<class X> value_t operator()(X, int y) { return !y; }
+	template<class X> value_t operator()(X, bool y) { return !y; }
 };
 
 struct op_if : op_base { const parser::token token = parser::token::ifop; };
@@ -308,19 +284,19 @@ struct op_xset : op_base {
 
 struct op_ppx : op_xset<op_add, parser::unaryplus>  { 
 	const dereference deref = dereference::none;
-	template<class X, class Y> value_t operator()(X x, Y y) { return op_xset::operator()(y, 1); }
+	template<class X, class Y> value_t operator()(X x, Y y) { return op_xset::operator()(y, 1.); }
 };
 struct op_mmx : op_xset<op_sub, parser::unaryminus> { 
 	const dereference deref = dereference::none;
-	template<class X, class Y> value_t operator()(X x, Y y) { return op_xset::operator()(y, 1); }
+	template<class X, class Y> value_t operator()(X x, Y y) { return op_xset::operator()(y, 1.); }
 };
 struct op_xpp : op_xset<op_add, parser::unaryplus>  { 
 	const associativity assoc = associativity::none;
-	template<class X, class Y> value_t operator()(X x, Y y) { auto v = *value_t{ x }; op_xset::operator()(x, 1); return v; }
+	template<class X, class Y> value_t operator()(X x, Y y) { auto v = *value_t{ x }; op_xset::operator()(x, 1.); return v; }
 };
 struct op_xmm : op_xset<op_sub, parser::unaryminus> { 
 	const associativity assoc = associativity::none;
-	template<class X, class Y> value_t operator()(X x, Y y) { auto v = *value_t{ x }; op_xset::operator()(x, 1); return v; }
+	template<class X, class Y> value_t operator()(X x, Y y) { auto v = *value_t{ x }; op_xset::operator()(x, 1.); return v; }
 };
 struct op_addset : op_xset<op_add, parser::plusset>	{ using op_xset::operator(); };
 struct op_subset : op_xset<op_sub, parser::minusset>{ using op_xset::operator(); };

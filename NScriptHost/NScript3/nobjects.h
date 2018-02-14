@@ -19,9 +19,9 @@ public:
 		return shared_from_this();
 	}
 	value_t index(value_t index) {
-		if(auto pi = std::get_if<int>(&index)) {
-			if(_items.size() < size_t(*pi))	_items.resize(*pi);
-			return std::make_shared<indexer>(std::static_pointer_cast<v_array>(shared_from_this()), *pi);
+		if(auto pi = std::get_if<double>(&index)) {
+			if(_items.size() < size_t(*pi))	_items.resize((size_t)*pi);
+			return std::make_shared<indexer>(std::static_pointer_cast<v_array>(shared_from_this()), (size_t)*pi);
 		}
 		throw std::system_error(std::make_error_code(std::errc::invalid_argument), "'index'");
 	}
@@ -192,7 +192,7 @@ public:
 		auto src = to_array(params);
 		auto dst = std::make_shared<v_array>();
 		for(auto& i : src->items()) {
-			if(to_int(_fun->call(i)))	dst->items().push_back(i);
+			if(to_bool(_fun->call(i)))	dst->items().push_back(i);
 		}
 		return dst;
 	}
