@@ -70,14 +70,14 @@ public:
 	{
 		// conversions
 		Assert::AreEqual("", eval("empty").c_str());
-		Assert::AreEqual("true", eval("true").c_str());
-		Assert::AreEqual("false", eval("false").c_str());
+		Assert::AreEqual("1", eval("true").c_str());
+		Assert::AreEqual("0", eval("false").c_str());
 		Assert::AreEqual("6", eval("int(pi())+int('3.1')").c_str());
 		Assert::AreEqual("0.14", eval("dbl('3.14')-dbl(3)").c_str());
 		Assert::AreEqual("12", eval("str(1)+str(2)").c_str());
 		// date
 		Assert::AreEqual("26.10.1974", eval("date('26.10.74')").c_str());
-		Assert::AreEqual("true", eval("year(now())>2012").c_str());
+		Assert::AreEqual("1", eval("year(now())>2012").c_str());
 		Assert::AreEqual("26", eval("day('26.10.74')").c_str());
 		Assert::AreEqual("10", eval("month('26.10.74')").c_str());
 		Assert::AreEqual("1974", eval("year('26.10.74')").c_str());
@@ -94,7 +94,7 @@ public:
 		Assert::AreEqual("20", eval("abs(sqrt(25)-5^2)").c_str());
 		Assert::AreEqual("2", eval("sgn(pi())-sgn(-pi())+sgn(0)").c_str());
 		Assert::AreEqual("0.14", eval("fract(0.14)").c_str());
-		Assert::AreEqual("true", eval("rnd() <= 1 && rnd() >= 0").c_str());
+		Assert::AreEqual("1", eval("rnd() <= 1 && rnd() >= 0").c_str());
 
 		// string
 		Assert::AreEqual("ABC DEF", eval("upper('abc'+chr(32)+'def')").c_str());
@@ -188,9 +188,9 @@ public:
 		Assert::AreEqual(make_error_code(nscript3::errc::bad_param_count), eval_hr("sin(1,2)"));
 		Assert::AreEqual(make_error_code(std::errc::invalid_argument), eval_hr("x=1;;;;x[5]"));
 		Assert::AreEqual(make_error_code(std::errc::operation_not_supported), eval_hr("1[5]"));
-		Assert::AreEqual(make_error_code(nscript3::errc::type_mismatch), eval_hr("(new hash)[0]()"));
-		Assert::AreEqual(make_error_code(nscript3::errc::type_mismatch), eval_hr("(new hash)[0].x"));
-		Assert::AreEqual(make_error_code(nscript3::errc::type_mismatch), eval_hr("(new hash)[0][0]"));
+		Assert::AreEqual("bad variant access", eval("(new hash)[0]()").c_str());
+		Assert::AreEqual("bad variant access", eval("(new hash)[0].x").c_str());
+		Assert::AreEqual("bad variant access", eval("(new hash)[0][0]").c_str());
 		Assert::AreEqual(make_error_code(nscript3::errc::runtime_error), eval_hr("a=[];a[0x7fffffff]=1"));
 		Assert::AreEqual(make_error_code(nscript3::errc::syntax_error), eval_hr("1e2.3"));
 		Assert::AreEqual(make_error_code(nscript3::errc::syntax_error), eval_hr("1e2e3"));

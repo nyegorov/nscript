@@ -31,7 +31,7 @@ tm date2tm(std::chrono::system_clock::time_point date)
 std::string to_string(value_t v)
 {
 	struct print_value {
-		string operator() (bool b) { return b ? "true" : "false"; }
+		string operator() (std::monostate) { return ""; }
 		string operator() (double d) {
 			if(d - (int)d == 0.)	return std::to_string((int)d);
 			std::stringstream ss;
@@ -40,7 +40,6 @@ std::string to_string(value_t v)
 		}
 		string operator() (string s) { return s; }
 		string operator() (nscript3::object_ptr o) {
-			if(o.get() == nullptr)	return "";
 			auto v = o->get();
 			if(auto po = std::get_if<object_ptr>(&v); *po != o)	return to_string(v);
 			return o->print();
@@ -53,6 +52,7 @@ std::string to_string(value_t v)
 bool to_bool(value_t v)
 {
 	struct to_bool_t {
+		bool operator() (std::monostate) { return 0; }
 		bool operator() (bool i) { return i; }
 		bool operator() (double d) { return d != 0; }
 		bool operator() (string s) { return s == "true" || std::stoi(s) != 0; }
@@ -64,6 +64,7 @@ bool to_bool(value_t v)
 double to_double(value_t v)
 {
 	struct to_double_t {
+		double operator() (std::monostate) { return 0.; }
 		double operator() (double d) { return d; }
 		double operator() (string s) { return std::stod(s); }
 		double operator() (object_ptr o) { throw std::system_error(errc::type_mismatch, "to_double"); }
@@ -196,20 +197,21 @@ struct op_not : op_base {
 #pragma region Logical
 
 struct comparator {
+	template<class X> int operator() (std::monostate, X) { return 1; }
+	template<class Y> int operator() (Y, std::monostate) { return -1; }
+	int operator() (std::monostate, std::monostate) { return 0; }
 	int operator() (bool b1, bool b2) { return !b1 && b2 ? -1 : b1 && !b2 ? 1 : 0; }
 	int operator() (double d1, double d2) { return d1 < d2 ? -1 : d1 > d2 ? 1 : 0; }
 	int operator() (string s1, string s2) { return s1.compare(s2); }
 	int operator() (object_ptr o1, object_ptr o2) {
 		if(auto a1 = to_array_if(o1), a2 = to_array_if(o2); a1 && a2) {
-			if(a1->size() != a2->size())	return operator()((double)a1->size(), (double)a2->size());
+			if(a1->size() != a2->size())	return operator()((int)a1->size(), (int)a2->size());
 			auto[p1, p2] = std::mismatch(a1->begin(), a1->end(), a2->begin(), a2->end());
 			if(p1 == a1->end() || p2 == a2->end())	return 0;
 			return std::visit(*this, *p1, *p2);
 		}
 		return o1 < o2 ? -1 : o1 > o2 ? 1 : 0;
 	}
-	template<class X> int operator()(X x, object_ptr y) { return -1; }
-	template<class Y> int operator()(object_ptr x, Y y) { return 1; }
 	template<class X, class Y> int operator()(X x, Y y) { throw std::system_error(errc::type_mismatch, "compare"); }
 };
 
@@ -310,7 +312,7 @@ struct op_assign : op_base {
 	const associativity assoc = associativity::right;
 	const dereference deref = dereference::right;
 	template<class Y> value_t operator()(object_ptr x, Y y)	{ x->set(y);  return {y}; }
-	value_t operator()(object_ptr x, object_ptr y)			{ auto v = y ? y->get() : y;  return x->set(v), v; }
+	value_t operator()(object_ptr x, object_ptr y)			{ auto v = y->get();  return x->set(v), v; }
 	using op_base::operator();
 };
 
@@ -345,6 +347,7 @@ struct op_new : op_base {
 
 struct op_statmt : op_base	{
 	const parser::token token = parser::token::stmt;
+	//template<class X> value_t operator()(X x, std::monostate) { return { x }; }
 	template<class X, class Y> value_t operator()(X x, Y y)	{ return { y }; }
 };
 
@@ -399,8 +402,7 @@ struct op_join : op_base {
 			return std::make_shared<v_array>(std::initializer_list<value_t>{x, y});
 	}
 	template<class Y> value_t operator()(object_ptr x, Y y) {
-		if(x == nullptr)	return { y };
-		if(is_empty(y))		return { x };
+		if(is_empty(y))	return { x };
 		if(auto xs = to_array_if(x); xs) {
 			if(auto ys = to_array_if({ y }); ys)
 				std::copy(ys->begin(), ys->end(), std::back_inserter(*xs));
