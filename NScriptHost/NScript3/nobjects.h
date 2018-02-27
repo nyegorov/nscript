@@ -6,6 +6,11 @@ namespace nscript3 {
 
 class object;
 
+i_object *get_obj(const value_t& v) {
+	if(auto po = std::get_if<object_ptr>(&v); po && po->get()) return po->get();
+	throw std::system_error(errc::type_mismatch, "hash");
+}
+
 // Class that represents arrays
 class v_array : public object {
 	std::vector<value_t>	_items;
@@ -53,9 +58,9 @@ protected:
 		indexer(std::shared_ptr<v_array> arr, int index) : _index(index), _data(arr) {};
 		value_t get()					{ return entry(); }
 		void set(value_t value)			{ entry(true) = value; }
-		value_t call(value_t params)	{ return std::get<object_ptr>(entry())->call(params); }
-		value_t item(string_t item)		{ return std::get<object_ptr>(entry())->item(item); }
-		value_t index(value_t index)	{ return std::get<object_ptr>(entry())->index(index); }
+		value_t call(value_t params)	{ return get_obj(entry())->call(params); }
+		value_t item(string_t item)		{ return get_obj(entry())->item(item); }
+		value_t index(value_t index)	{ return get_obj(entry())->index(index); }
 	};
 };
 
@@ -66,16 +71,16 @@ public:
 	variable() : _value() {}
 	value_t get() { return _value; }
 	void set(value_t value) { _value = value; }
-	value_t create() const { return std::get<object_ptr>(_value)->create(); }
-	value_t call(value_t params) { return std::get<object_ptr>(_value)->call(params); }
-	value_t item(string_t item) { return std::get<object_ptr>(_value)->item(item); }
+	value_t create() const		 { return get_obj(_value)->create(); }
+	value_t call(value_t params) { return get_obj(_value)->call(params); }
+	value_t item(string_t item)  { return get_obj(_value)->item(item); }
 	value_t index(value_t index) {
-		if(auto pobj = std::get_if<object_ptr>(&_value))	return (*pobj)->index(index);
+		if(auto pobj = std::get_if<object_ptr>(&_value); pobj && pobj->get())	return (*pobj)->index(index);
 		auto a = to_array(_value);
 		_value = a;
 		return a->index(index);
 	}
-	string_t print() const { return std::get<object_ptr>(_value)->print(); }
+	string_t print() const { return get_obj(_value)->print(); }
 };
 
 // Built-in functions
@@ -86,7 +91,8 @@ public:
 		if(auto pa = to_array_if(params); pa) {
 			if(_count >= 0 && _count != pa->size())	throw std::system_error(errc::bad_param_count, "'fn'");
 			return _func(*pa);
-		} else if(is_empty(params) && _count <= 0)	return _func({});
+		} 
+		else if(is_empty(params) && _count <= 0)	return _func({});
 		else if(_count < 0 || _count == 1)			return _func({ params });
 		else										throw std::system_error(errc::bad_param_count, "'fn'");
 	}
@@ -119,9 +125,6 @@ public:
 	value_t call(value_t params) {
 		nscript script(_body, &_context);
 		process_args(_args, params, script);
-/*		auto [ok, res] = script.eval({});
-		if(!ok)	throw std::system_error(script.get_error_info().code, to_string(res));
-		return res;*/
 		value_t res;
 		script.parse<nscript::Script>(res, false);
 		return res;
@@ -228,9 +231,9 @@ protected:
 		indexer(std::shared_ptr<assoc_array> arr, string_t index) : _index(index), _data(arr) {};
 		value_t get()					{ return entry(); }
 		void set(value_t value)			{ entry() = value; }
-		value_t call(value_t params)	{ return std::get<object_ptr>(entry())->call(params); }
-		value_t item(string_t item)		{ return std::get<object_ptr>(entry())->item(item); }
-		value_t index(value_t index)	{ return std::get<object_ptr>(entry())->index(index); }
+		value_t call(value_t params)	{ return get_obj(entry())->call(params); }
+		value_t item(string_t item)		{ return get_obj(entry())->item(item); }
+		value_t index(value_t index)	{ return get_obj(entry())->index(index); }
 	};
 };
 
