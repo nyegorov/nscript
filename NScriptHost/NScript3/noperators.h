@@ -6,7 +6,7 @@ namespace nscript3 {
 
 using std::string;
 
-void not_supported(const char *op)	{ throw std::system_error(std::make_error_code(std::errc::operation_not_supported), op); }
+inline void not_supported(const char *op)	{ throw std::system_error(std::make_error_code(std::errc::operation_not_supported), op); }
 
 #pragma region Conversion
 
@@ -137,7 +137,7 @@ date_t to_date(value_t v)
 #pragma region Mathematical
 
 struct v_add {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_add"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_add"); return {}; }
 	template<class Y> value_t operator()(object_ptr x, Y y)	{ return std::visit([this, y](auto x) { return operator()(x, y); }, x->get()); }
 	template<class X> value_t operator()(X x, object_ptr y) { return std::visit([this, x](auto y) { return operator()(x, y); }, y->get()); }
 	value_t operator()(object_ptr x, object_ptr y)			{ return std::visit([this](auto x, auto y) { return operator()(x, y); }, x->get(), y->get()); }
@@ -154,7 +154,7 @@ struct v_add {
 };
 
 struct v_sub {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_sub"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_sub"); return {}; }
 	template<class Y> value_t operator()(object_ptr x, Y y) { return std::visit([this, y](auto x) { return operator()(x, y); }, x->get()); }
 	template<class X> value_t operator()(X x, object_ptr y) { return std::visit([this, x](auto y) { return operator()(x, y); }, y->get()); }
 	value_t operator()(object_ptr x, object_ptr y)			{ return std::visit([this](auto x, auto y) { return operator()(x, y); }, x->get(), y->get()); }
@@ -166,14 +166,14 @@ struct v_sub {
 };
 
 struct v_neg {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_neg"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_neg"); return {}; }
 	template<class X> value_t operator()(X, int y) { return { -y }; }
 	template<class X> value_t operator()(X, double y) { return { -y }; }
 	template<class X> value_t operator()(X x, object_ptr y) { return std::visit([this, x](auto y) { return operator()(x, y); }, y->get()); }
 };
 
 struct v_mul {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_mul"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_mul"); return {}; }
 	value_t operator()(int x, int y) { return { x * y }; }
 	value_t operator()(int x, double y) { return { x * y }; }
 	value_t operator()(double x, int y) { return { x * y }; }
@@ -181,7 +181,7 @@ struct v_mul {
 };
 
 struct v_div {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_div"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_div"); return {}; }
 	value_t operator()(int x, int y) { return { x / y }; }
 	value_t operator()(int x, double y) { return { x / y }; }
 	value_t operator()(double x, int y) { return { x / y }; }
@@ -189,7 +189,7 @@ struct v_div {
 };
 
 struct v_mod {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_mod"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_mod"); return {}; }
 	value_t operator()(int x, int y) { return { x % y }; }
 	value_t operator()(int x, double y) { return fmod(x, y); }
 	value_t operator()(double x, int y) { return fmod(x, y); }
@@ -197,7 +197,7 @@ struct v_mod {
 };
 
 struct v_pow {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_pow"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_pow"); return {}; }
 	value_t operator()(int x, int y) { return { pow(x, y) }; }
 	value_t operator()(int x, double y) { return { pow(x, y) }; }
 	value_t operator()(double x, int y) { return { pow(x, y) }; }
@@ -217,18 +217,18 @@ const op_info op_neg{ parser::token::minus,		associativity::right,dereference::b
 #pragma region Bitwise
 
 struct v_and {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_and"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_and"); return {}; }
 	value_t operator()(int x, int y)						{ return { x & y }; }
 };
 
 struct v_or {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_or"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_or"); return {}; }
 	value_t operator()(int x, int y)						{ return { x | y }; }
 	template<class X> value_t operator()(X x, object_ptr y) { return y->call(x); }
 };
 
 struct v_not {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_not"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_not"); return {}; }
 	template<class X> value_t operator()(X, int y)			{ return ~y; }
 };
 
@@ -269,21 +269,21 @@ struct v_eq { template<class X, class Y> value_t operator()(X x, Y y) { return c
 struct v_ne { template<class X, class Y> value_t operator()(X x, Y y) { return comparator()(x, y) != 0; } };
 
 struct v_land {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_land"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_land"); return {}; }
 	value_t operator()(int x, int y)						{ return { x && y }; }
 };
 
 struct v_lor {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_lor"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_lor"); return {}; }
 	value_t operator()(int x, int y)						{ return { x || y }; }
 };
 
 struct v_lnot {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_lnot"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_lnot"); return {}; }
 	template<class X> value_t operator()(X, int y)			{ return !y; }
 };
 
-struct v_if { template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_if"); } };
+struct v_if { template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_if"); return {}; } };
 
 const op_info op_gt{  parser::token::gt,  associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_gt(),  x, y); } };
 const op_info op_ge{  parser::token::ge,  associativity::left, dereference::both, [](value_t& x, value_t& y) { return std::visit(v_ge(),  x, y); } };
@@ -332,28 +332,28 @@ const op_info op_divset{ parser::token::divset,	 associativity::right, dereferen
 #pragma region Objects
 
 struct v_assign {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_assign"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_assign"); return {}; }
 	template<class Y> value_t operator()(object_ptr x, Y y)	{ x->set(y);  return {y}; }
 	value_t operator()(object_ptr x, object_ptr y)			{ auto v = y->get();  return x->set(v), v; }
 };
 
 struct v_call {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_call"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_call"); return {}; }
 	template<class Y> value_t operator()(object_ptr x, Y y) { return x->call(y); }
 };
 
 struct v_index {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_index"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_index"); return {}; }
 	template<class Y> value_t operator()(object_ptr x, Y y) { return x->index(y); }
 };
 
 struct v_item {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_item"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_item"); return {}; }
 	value_t operator()(object_ptr x, string_t y) { return x->item(y); }
 };
 
 struct v_new {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_new"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_new"); return {}; }
 	template<class X> value_t operator()(X, object_ptr y)	{ return y->create(); }
 };
 
@@ -382,7 +382,7 @@ public:
 };
 
 struct v_dot {
-	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_dot"); }
+	template<class X, class Y> value_t operator()(X x, Y y) { not_supported("op_dot"); return {}; }
 	value_t operator()(object_ptr x, object_ptr y)			{ return std::make_shared<composer>(x, y); }
 };
 
