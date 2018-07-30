@@ -16,6 +16,7 @@
 
 
 // TODO: reference additional headers your program requires here
+#include <atomic>
 #include <array>
 #include <ctime>
 #include <iomanip>

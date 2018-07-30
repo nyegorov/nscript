@@ -11,6 +11,7 @@
 #include "CppUnitTest.h"
 
 // TODO: reference additional headers your program requires here
+#include <atomic>
 #include <ctime>
 #include <iomanip>
 #include <string>
